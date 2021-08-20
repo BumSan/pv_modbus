@@ -4,6 +4,15 @@ from pv_register_config import HeidelbergWBReadInputs
 from pv_register_config import HeidelbergWBReadHolding, HeidelbergWBWriteHolding
 
 
+class WBDef:
+    ENABLE_STANDBY = 0
+    DISABLE_STANDBY = 4
+    CHARGE_NOPLUG1 = 2
+    CHARGE_NOPLUG2 = 3
+    CHARGE_REQUEST1 = 6
+    CHARGE_REQUEST2 = 7
+
+
 class ModbusRTUConfig:
     def __init__(self, mode: str, port: str, timeout: int, baudrate: int, bytesize: int, parity: str, stopbits: int):
         self.mode = mode
@@ -37,50 +46,50 @@ class ModbusRTUHeidelbergWB:
             print('No Connection possible to WB Heidelberg')
 
     # do all the Read Input Registers
-    def _call_remote_input_registers(self, slave_id: int, register_set: ModbusRegisters) -> int:
+    def _call_remote_input_registers(self, slave_id: int, register_set: ModbusRegisters):
         read = self.wb_handle.read_input_registers(register_set.register
                                                    , register_set.length
                                                    , unit=slave_id)
         print(read.registers)
         return read.registers
 
-    def get_charging_state(self, slave_id: int) -> int:
+    def get_charging_state(self, slave_id: int):
         return self._call_remote_input_registers(slave_id, self.wb_read_input.chargingState)
 
-    def get_actual_charge_power(self, slave_id: int) -> int:
+    def get_actual_charge_power(self, slave_id: int):
         return self._call_remote_input_registers(slave_id, self.wb_read_input.actualChargePower)
 
-    def get_pcb_temperature(self, slave_id: int) -> int:
+    def get_pcb_temperature(self, slave_id: int):
         return self._call_remote_input_registers(slave_id, self.wb_read_input.PCB_Temperature)
 
     # do all the Read Holding Registers
-    def _call_remote_read_holding_registers(self, slave_id: int, register_set: ModbusRegisters) -> int:
+    def _call_remote_read_holding_registers(self, slave_id: int, register_set: ModbusRegisters):
         read = self.wb_handle.read_holding_registers(register_set.register
                                                      , register_set.length
                                                      , unit=slave_id)
         print(read.registers)
         return read.registers
 
-    def get_max_current(self, slave_id: int) -> int:
+    def get_max_current(self, slave_id: int):
         return self._call_remote_read_holding_registers(slave_id, self.wb_read_holding.maxCurrent)
 
-    def get_failsafe_max_current(self, slave_id: int) -> int:
+    def get_failsafe_max_current(self, slave_id: int):
         return self._call_remote_read_holding_registers(slave_id, self.wb_read_holding.failsafeMaxCurrent)
 
     # do all the write holding registers
-    def _call_remote_write_holding_registers(self, slave_id: int, register_set: ModbusRegisters) -> int:
+    def _call_remote_write_holding_registers(self, register_set: ModbusRegisters, val, slave_id: int):
         response = self.wb_handle.write_registers(register_set.register
-                                                  , register_set.length
+                                                  , value=val
                                                   , unit=slave_id)
         if response.isError():
             print('Could not write Register' + str(register_set.register))
         return response
 
-    def set_standby_control(self, slave_id: int):
-        return self._call_remote_write_holding_registers(slave_id, self.wb_write_holding.standByControl)
+    def set_standby_control(self, slave_id: int, val):
+        return self._call_remote_write_holding_registers(self.wb_write_holding.standByControl, val, slave_id)
 
-    def set_max_current(self, slave_id: int):
-        return self._call_remote_write_holding_registers(slave_id, self.wb_write_holding.maxCurrent)
+    def set_max_current(self, slave_id: int, val):
+        return self._call_remote_write_holding_registers(self.wb_write_holding.maxCurrent, val, slave_id)
 
-    def set_failsafe_max_current(self, slave_id: int):
-        return self._call_remote_write_holding_registers(slave_id, self.wb_write_holding.failsafeMaxCurrent)
+    def set_failsafe_max_current(self, slave_id: int, val):
+        return self._call_remote_write_holding_registers(self.wb_write_holding.failsafeMaxCurrent, val, slave_id)
