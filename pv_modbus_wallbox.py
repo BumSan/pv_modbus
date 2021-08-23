@@ -56,7 +56,7 @@ class ModbusRTUHeidelbergWB:
     def get_charging_state(self, slave_id: int):
         return self._call_remote_input_registers(slave_id, self.wb_read_input.chargingState)
 
-    def get_actual_charge_power(self, slave_id: int):
+    def get_actual_charge_power(self, slave_id: int):  # returns in Watt
         return self._call_remote_input_registers(slave_id, self.wb_read_input.actualChargePower)
 
     def get_pcb_temperature(self, slave_id: int):

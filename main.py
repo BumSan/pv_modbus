@@ -11,8 +11,10 @@ log.setLevel(logging.DEBUG)
 
 WB1_SLAVEID = 1
 WB2_SLAVEID = 2
-WB_SYSTEM_MAX_CURRENT = 160  # Ampere*10
-WB_MIN_CURRENT = 60  # Ampere*10
+WB_SYSTEM_MAX_CURRENT = 16  # Ampere
+WB_MIN_CURRENT = 6  # Ampere
+PV_CHARGE_AMP_TOLERANCE = 2  # Amp -> if we do not have enough PV power to reach the WB min, use this threshold value
+# and take up to x Amp from grid
 
 # Must have Features
 # minimale Ladedauer (zB 5min)
@@ -52,61 +54,104 @@ wb_heidelberg.connect_wb_heidelberg()
 # ->  if already charging from PV, keep on for min 5min)
 
 # check if we have to activate standby
-def activate_standby(wallbox: WBSystemState):
+def do_we_need_to_standby(wallbox: WBSystemState):
     if wallbox.charge_state == WBDef.CHARGE_NOPLUG1 or wallbox.charge_state == WBDef.CHARGE_NOPLUG2:
         if wallbox.standby_active == WBDef.DISABLE_STANDBY:
             wb_heidelberg.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
 
 
-def plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
+def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
     return wallbox.charge_state == WBDef.CHARGE_REQUEST1 or wallbox.charge_state == WBDef.CHARGE_REQUEST2
+
+
+def check_for_error_and_assign (val_to_check, assign_to):
+    if val_to_check.noError():
+        assign_to = val_to_check
+
+
+def set_power_for_wallbox(wallbox:WBSystemState):
+    pass
+
+
+def watt_to_amp (val_watt: int) -> float:
+    val_amp = val_watt / (230*3)  # 3 Phases, 230V
+    return val_amp
 
 
 # loop from here
 
-# check both WB for charge plug and charge request
+
 try:
+    # ToDo: Read out all; to update our WB1+2 states
+
+    # check both WB for charge plug and charge request
     charge_state_WB1 = wb_heidelberg.get_charging_state(wallbox1.slave_id)
     charge_state_WB2 = wb_heidelberg.get_charging_state(wallbox2.slave_id)
 
     # check for standby activation (.. saves 4 Watt if no Car is plugged in)
     if charge_state_WB1.noError():
         wallbox1.charge_state = charge_state_WB1
-        activate_standby(wallbox1)
+        do_we_need_to_standby(wallbox1)
     if charge_state_WB2.noError():
         wallbox2.charge_state = charge_state_WB2
-        activate_standby(wallbox2)
+        do_we_need_to_standby(wallbox2)
 
     # check Switch Position: Charge all or only PV
     # ToDo later. Have the switch static now
     pv_charge_only = False
 
+    # charge max (11 kW overall)
     if not pv_charge_only:
         # check how many Plugs are connected in correct state
         connected = 0
-        if plug_connected_and_charge_ready(wallbox1):
+        if is_plug_connected_and_charge_ready(wallbox1):
             connected += 1
-        if plug_connected_and_charge_ready(wallbox2):
+        if is_plug_connected_and_charge_ready(wallbox2):
             connected += 1
 
         # assign respective power to the wallboxes, evenly
         if connected > 0:
-            if plug_connected_and_charge_ready(wallbox1):
+            if is_plug_connected_and_charge_ready(wallbox1):
                 wb_heidelberg.set_max_current(wallbox1.slave_id, WB_SYSTEM_MAX_CURRENT // connected)
                 print('Wallbox 1 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected))
-            if plug_connected_and_charge_ready(wallbox2):
+            if is_plug_connected_and_charge_ready(wallbox2):
                 wb_heidelberg.set_max_current(wallbox2.slave_id, WB_SYSTEM_MAX_CURRENT // connected)
                 print('Wallbox 2 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected))
     else:
         # Charge only via PV
+
+        # Get the PV data (all in Watt)
         pv_actual_output = solar_log.get_actual_output_sync_ac()
         actual_consumption = solar_log.get_actual_consumption_sync_ac()
 
-        # the difference between the 2 is our available PV Power for addtl. charging (keep actual charge of cars in mind)
-        available_power_watt = pv_actual_output - actual_consumption
+        # check at WB how much we currently use for charging
+        already_used_charging_power_for_car=0
+        if is_plug_connected_and_charge_ready(wallbox1):
+            val = wb_heidelberg.get_actual_charge_power(wallbox1.slave_id)
+            if val.noError():
+                already_used_charging_power_for_car += val
+        if is_plug_connected_and_charge_ready(wallbox2):
+            val = wb_heidelberg.get_actual_charge_power(wallbox2.slave_id)
+            if val.noError():
+                already_used_charging_power_for_car += val
+        print ('Currently used power for charging: ' + str(already_used_charging_power_for_car) + ' Watt')
 
-        # check how much we currently use for charging
+        # calculate how much power we have to set
+        # e.g. PV produces 6000 Watt, House consumes 4500 Watt (incl. Car charging!), Car charges with 4000 Watt
+        # 6000 - 4500 + 4000 -> 5500 Watt we can use for charging the car
+        available_power= pv_actual_output - actual_consumption + already_used_charging_power_for_car
 
+        # check for enough power to use PV
+        if watt_to_amp(available_power) >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
+            if is_plug_connected_and_charge_ready(wallbox1):
+                # ToDo: Charge with what we have
+                pass
+            elif is_plug_connected_and_charge_ready(wallbox2):
+                # ToDo: Charge with what we have
+                pass
+        else:
+            # ToDO: Deactivate Charging for all WB (set current to 0)
+            pass
 
 
 
