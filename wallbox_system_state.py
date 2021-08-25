@@ -20,11 +20,14 @@ class WBSystemState:
 
     pv_charge_active = False
 
+    # datetime when the WB started charging
+    last_charge_activation = 0
+    # datetime when the WB stopped charging
+    last_charge_deactivation = 0
+
     last_tick = 0
 
-    # time constraints
-    min_time_pv_charge = 5*60  # secs. We want to charge at least for x secs before switch on->off (PV charge related)
-    min_wait_before_pv_on = 2*60  # secs. We want to wait at least for x secs before switch off->on (PV charge related)
+
 
     # take care of min time activations
     def calc_update(self):

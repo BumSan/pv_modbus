@@ -18,10 +18,74 @@ WB_MIN_CURRENT = 6  # Ampere
 PV_CHARGE_AMP_TOLERANCE = 2  # Amp -> if we do not have enough PV power to reach the WB min, use this threshold value
 # and take up to x Amp from grid
 
+# time constraints
+MIN_TIME_PV_CHARGE = 5 * 60  # secs. We want to charge at least for x secs before switch on->off (PV charge related)
+MIN_WAIT_BEFORE_PV_ON = 2 * 60  # secs. We want to wait at least for x secs before switch off->on (PV charge related)
+
 # Must have Features
 # minimale Ladedauer (zB 5min)
 #  min Dauer zwischen Ladevorgängen
 # Umschalten PV/Sofort-Laden??
+
+
+# check if we have to activate standby
+def do_we_need_to_standby(wallbox: WBSystemState):
+    if wallbox.charge_state == WBDef.CHARGE_NOPLUG1 or wallbox.charge_state == WBDef.CHARGE_NOPLUG2:
+        if wallbox.standby_active == WBDef.DISABLE_STANDBY:
+            wb_heidelberg.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
+
+
+def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
+    return wallbox.charge_state == WBDef.CHARGE_REQUEST1 or wallbox.charge_state == WBDef.CHARGE_REQUEST2
+
+
+# wrapper so we can filter and work on min time
+def set_current_for_wallbox(wallbox: WBSystemState, current):
+    wb_heidelberg.set_max_current(wallbox.slave_id, current)
+
+
+# wrapper so we can filter and work on min time
+def set_pv_current_for_wallbox(wallbox: WBSystemState, current):
+    current_allowed = False
+
+    if wallbox.charge_state is False and current > 0:  # === switch it on ===
+        # check if allowed (was off for long enough)
+        if wallbox.last_charge_deactivation == 0:
+            # was never deactivated, so go ahead with charge and set timestamps for activation
+            current_allowed = True
+            wallbox.last_charge_activation = datetime.datetime.now()
+        else:
+            # check last time it was switched off, so we can keep minimum time off
+            time_diff = datetime.datetime.now() - wallbox.last_charge_deactivation
+            if time_diff.total_seconds() > MIN_WAIT_BEFORE_PV_ON:
+                current_allowed = True
+                wallbox.last_charge_activation = datetime.datetime.now()
+            else:
+                current_allowed = False  # will be tried again later in another cycle
+    elif wallbox.charge_state is False and current == 0:  # === keep it off ===
+        current_allowed = False  # is off anyway, don´t change
+    elif wallbox.charge_state is True and current == 0:  # === switch it off ===
+        # check last time it was switched on, so we can keep minimum time on
+        time_diff = datetime.datetime.now() - wallbox.last_charge_activation
+        if time_diff.total_seconds() > MIN_TIME_PV_CHARGE:
+            current_allowed = True
+            wallbox.last_charge_deactivation = datetime.datetime.now()
+        else:
+            current_allowed = False  # will be tried again later in another cycle
+    elif wallbox.charge_state is True and current > 0:  # === keep it on ===
+        current_allowed = True
+
+    if current_allowed:
+        wb_heidelberg.set_max_current(wallbox.slave_id, current)
+        if current > 0:
+            wallbox.charge_state = True
+        else:
+            wallbox.charge_state = False
+
+
+def watt_to_amp (val_watt: int) -> float:
+    val_amp = val_watt / (230*3)  # 3 Phases, 230V
+    return val_amp
 
 
 # main
@@ -45,6 +109,7 @@ wb_heidelberg = pv_modbus_wallbox.ModbusRTUHeidelbergWB(wb_config=config_wb_heid
 wb_heidelberg.connect_wb_heidelberg()
 
 
+
 # basically
 # check if any car is attached to WB
 # -> deactivate Standby, if active (if nothing attached: activate Standby)
@@ -55,33 +120,13 @@ wb_heidelberg.connect_wb_heidelberg()
 # ->  check last charge time (> 5min Abstand?),
 # ->  if already charging from PV, keep on for min 5min)
 
-# check if we have to activate standby
-def do_we_need_to_standby(wallbox: WBSystemState):
-    if wallbox.charge_state == WBDef.CHARGE_NOPLUG1 or wallbox.charge_state == WBDef.CHARGE_NOPLUG2:
-        if wallbox.standby_active == WBDef.DISABLE_STANDBY:
-            wb_heidelberg.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
-
-
-def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
-    return wallbox.charge_state == WBDef.CHARGE_REQUEST1 or wallbox.charge_state == WBDef.CHARGE_REQUEST2
-
-
-# wrapper so we can filter and work on min time
-def set_current_for_wallbox(wallbox: WBSystemState, current: float):
-    wb_heidelberg.set_max_current(wallbox.slave_id, watt_to_amp(current))
-
-
-def watt_to_amp (val_watt: int) -> float:
-    val_amp = val_watt / (230*3)  # 3 Phases, 230V
-    return val_amp
-
+try:
+    # if we lose communication to the WB, assume we lose it to both; and split max current of 16A evenly
+    wb_heidelberg.set_failsafe_max_current(slave_id=wallbox1.slave_id, val=8)
+    wb_heidelberg.set_failsafe_max_current(slave_id=wallbox2.slave_id, val=8)
 
 # loop from here
 
-last_activation = datetime.datetime
-
-
-try:
     # ToDo: Read out all; to update our WB1+2 states
 
     # check both WB for charge plug and charge request
@@ -112,10 +157,10 @@ try:
         # assign respective power to the wallboxes, evenly
         if connected > 0:  # ToDo: Move all interactions with WB modbus to end; at one place (write down WB states)
             if is_plug_connected_and_charge_ready(wallbox1):
-                wb_heidelberg.set_max_current(wallbox1.slave_id, WB_SYSTEM_MAX_CURRENT // connected)
+                set_current_for_wallbox(wallbox1, WB_SYSTEM_MAX_CURRENT // connected)
                 print('Wallbox 1 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected))
             if is_plug_connected_and_charge_ready(wallbox2):
-                wb_heidelberg.set_max_current(wallbox2.slave_id, WB_SYSTEM_MAX_CURRENT // connected)
+                set_current_for_wallbox(wallbox2, WB_SYSTEM_MAX_CURRENT // connected)
                 print('Wallbox 2 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected))
     else:
         # Charge only via PV
@@ -145,21 +190,21 @@ try:
         if watt_to_amp(available_power) >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
             # Charge galore
             if is_plug_connected_and_charge_ready(wallbox1):  # this makes WB1 our preferred wallbox for PV charge
-                set_current_for_wallbox(wallbox1, watt_to_amp(available_power))
-                set_current_for_wallbox(wallbox2, 0)
+                set_pv_current_for_wallbox(wallbox1, watt_to_amp(available_power))
+                set_pv_current_for_wallbox(wallbox2, 0)
                 wallbox1.pv_charge_active = True
                 wallbox2.pv_charge_active = False
                 print('Wallbox1 PV current set to: ' + str(watt_to_amp(available_power)) + ' A')
             elif is_plug_connected_and_charge_ready(wallbox2):
-                set_current_for_wallbox(wallbox1, 0)
-                set_current_for_wallbox(wallbox2, watt_to_amp(available_power))
+                set_pv_current_for_wallbox(wallbox1, 0)
+                set_pv_current_for_wallbox(wallbox2, watt_to_amp(available_power))
                 wallbox1.pv_charge_active = False
                 wallbox2.pv_charge_active = True
                 print('Wallbox2 PV current set to: ' + str(watt_to_amp(available_power)) + ' A')
         else:
             # stop PV charging
-            set_current_for_wallbox(wallbox1, 0)
-            set_current_for_wallbox(wallbox2, 0)
+            set_pv_current_for_wallbox(wallbox1, 0)
+            set_pv_current_for_wallbox(wallbox2, 0)
             wallbox1.pv_charge_active = False
             wallbox2.pv_charge_active = False
             print('===  PV Charge off. Not enough power: ' + str(watt_to_amp(available_power)) + ' A  ===')

@@ -79,7 +79,7 @@ class ModbusRTUHeidelbergWB:
     # do all the write holding registers
     def _call_remote_write_holding_registers(self, register_set: ModbusRegisters, val, slave_id: int):
         response = self.wb_handle.write_registers(register_set.register
-                                                  , value=val
+                                                  , values=val
                                                   , unit=slave_id)
         if response.isError():
             print('Could not write Register' + str(register_set.register))
@@ -94,5 +94,7 @@ class ModbusRTUHeidelbergWB:
         return self._call_remote_write_holding_registers(self.wb_write_holding.maxCurrent, val, slave_id)
 
     def set_failsafe_max_current(self, slave_id: int, val: int):
+        # convert Ampere to WB values
+        val = val*10
         return self._call_remote_write_holding_registers(self.wb_write_holding.failsafeMaxCurrent, val, slave_id)
 
