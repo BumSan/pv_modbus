@@ -161,7 +161,7 @@ while True:
     # check Switch Position: Charge all or only PV
     # ===================
     # ToDo later. Have the switch static now
-    pv_charge_only = True
+    pv_charge_only = False
 
     # ===================
     # charge max (11 kW overall)
@@ -178,10 +178,10 @@ while True:
         if connected > 0:
             if is_plug_connected_and_charge_ready(wallbox1):
                 set_current_for_wallbox(wallbox1, WB_SYSTEM_MAX_CURRENT // connected)
-                print('Wallbox 1 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected))
+                print('Wallbox 1 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected) + ' A')
             if is_plug_connected_and_charge_ready(wallbox2):
                 set_current_for_wallbox(wallbox2, WB_SYSTEM_MAX_CURRENT // connected)
-                print('Wallbox 2 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected))
+                print('Wallbox 2 current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected) + ' A')
     else:
         # ===================
         # Charge only via PV
