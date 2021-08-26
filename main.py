@@ -9,7 +9,7 @@ import datetime
 # log level
 logging.basicConfig()
 log = logging.getLogger()
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.FATAL)
 
 WB1_SLAVEID = 1
 WB2_SLAVEID = 2
@@ -21,6 +21,7 @@ PV_CHARGE_AMP_TOLERANCE = 2  # Amp -> if we do not have enough PV power to reach
 # time constraints
 MIN_TIME_PV_CHARGE = 5 * 60  # secs. We want to charge at least for x secs before switch on->off (PV charge related)
 MIN_WAIT_BEFORE_PV_ON = 2 * 60  # secs. We want to wait at least for x secs before switch off->on (PV charge related)
+
 
 # Must have Features
 # minimale Ladedauer (zB 5min)
@@ -83,8 +84,16 @@ def set_pv_current_for_wallbox(wallbox: WBSystemState, current):
             wallbox.pv_charge_active = False
 
 
-def watt_to_amp (val_watt: int) -> float:
+def watt_to_amp(val_watt: int) -> float:
     val_amp = val_watt / (230*3)  # 3 Phases, 230V
+    return val_amp
+
+
+def watt_to_amp_rounded(val_watt: int) -> float:
+    val_amp = val_watt / (230*3)  # 3 Phases, 230V
+    val_amp *= 10
+    val_amp = int(val_amp)
+    val_amp /= 10
     return val_amp
 
 
@@ -95,6 +104,8 @@ wallbox2 = WBSystemState(WB2_SLAVEID)
 # SolarLog
 config_solar_log = pv_modbus_solarlog.ModbusTCPConfig('192.168.178.103', 502, slave_id=0x01)
 solar_log = pv_modbus_solarlog.ModbusTCPSolarLog(config_solar_log, pv_modbus_solarlog.SolarLogReadInputs())
+
+# ToDo: Remove this
 solar_log.get_actual_output_sync_ac()
 solar_log.get_actual_consumption_sync_ac()
 
@@ -124,8 +135,14 @@ try:
     # if we lose communication to the WB, assume we lose it to both; and split max current of 16A evenly
     wb_heidelberg.set_failsafe_max_current(slave_id=wallbox1.slave_id, val=8)
     wb_heidelberg.set_failsafe_max_current(slave_id=wallbox2.slave_id, val=8)
+except:
+    print('Oh error. Something went wrong. ToDo ;)')
 
 # loop from here
+while True:
+    print(' ')
+    print('Next Calculation cycle starts')
+    print(datetime.datetime.now())
 
     # ToDo: Read out all; to update our WB1+2 states
 
@@ -134,18 +151,17 @@ try:
     charge_state_WB2 = wb_heidelberg.get_charging_state(wallbox2.slave_id)
 
     # check for standby activation (.. saves 4 Watt if no Car is plugged in)
-    if charge_state_WB1.noError():
-        wallbox1.charge_state = charge_state_WB1
-        do_we_need_to_standby(wallbox1)
-    if charge_state_WB2.noError():
-        wallbox2.charge_state = charge_state_WB2
-        do_we_need_to_standby(wallbox2)
+    wallbox1.charge_state = charge_state_WB1
+    do_we_need_to_standby(wallbox1)
+
+    wallbox2.charge_state = charge_state_WB2
+    do_we_need_to_standby(wallbox2)
 
     # ===================
     # check Switch Position: Charge all or only PV
     # ===================
     # ToDo later. Have the switch static now
-    pv_charge_only = False
+    pv_charge_only = True
 
     # ===================
     # charge max (11 kW overall)
@@ -170,47 +186,62 @@ try:
         # ===================
         # Charge only via PV
         # ===================
+        print('== PV-Charge only active ==')
 
         # Get the PV data (all in Watt)
         pv_actual_output = solar_log.get_actual_output_sync_ac()
         actual_consumption = solar_log.get_actual_consumption_sync_ac()
 
+        # for testing only
+        if WBDef.FAKE_WB_CONNECTION:
+            pv_actual_output = 6000
+
         # check at Wallboxes how much we currently use for charging
         already_used_charging_power_for_car = 0
         if is_plug_connected_and_charge_ready(wallbox1):
             val = wb_heidelberg.get_actual_charge_power(wallbox1.slave_id)
-            if val.noError():
-                already_used_charging_power_for_car += val
+            already_used_charging_power_for_car += val
         if is_plug_connected_and_charge_ready(wallbox2):
             val = wb_heidelberg.get_actual_charge_power(wallbox2.slave_id)
-            if val.noError():
-                already_used_charging_power_for_car += val
+            already_used_charging_power_for_car += val
         print('Currently used power for charging: ' + str(already_used_charging_power_for_car) + ' Watt')
 
         # calculate how much power we have to set
         # e.g. PV produces 6000 Watt, House consumes 4500 Watt (incl. Car charging!), Car charges with 4000 Watt
         # 6000 - 4500 + 4000 -> 5500 Watt we can use for charging the car
-        available_power = pv_actual_output - actual_consumption + already_used_charging_power_for_car
+
+        # calc house consumption
+        house_consumption = actual_consumption - already_used_charging_power_for_car
+        if house_consumption < 0:  # could happen as measurement is from different devices and times
+            house_consumption = 0
+
+        # calc how much we could assign to the cars
+        available_power = pv_actual_output - house_consumption
+
+        # sanity check, can´t be more than PV output
+        if available_power > pv_actual_output:
+            available_power = pv_actual_output
+        print('Available power for PV charge: ' + str(available_power) + ' Watt')
 
         # check for enough power to use PV
         if watt_to_amp(available_power) >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
             # Charge galore
             if is_plug_connected_and_charge_ready(wallbox1):  # this makes WB1 our preferred wallbox for PV charge
-                set_pv_current_for_wallbox(wallbox1, watt_to_amp(available_power))
+                set_pv_current_for_wallbox(wallbox1, watt_to_amp_rounded(available_power))
                 set_pv_current_for_wallbox(wallbox2, 0)
-                print('Wallbox1 PV current set to: ' + str(watt_to_amp(available_power)) + ' A')
+                print('Wallbox1 PV current set to: ' + str(watt_to_amp_rounded(available_power)) + ' A')
             elif is_plug_connected_and_charge_ready(wallbox2):
                 set_pv_current_for_wallbox(wallbox1, 0)
-                set_pv_current_for_wallbox(wallbox2, watt_to_amp(available_power))
-                print('Wallbox2 PV current set to: ' + str(watt_to_amp(available_power)) + ' A')
+                set_pv_current_for_wallbox(wallbox2, watt_to_amp_rounded(available_power))
+                print('Wallbox2 PV current set to: ' + str(watt_to_amp_rounded(available_power)) + ' A')
         else:
             # stop PV charging
             set_pv_current_for_wallbox(wallbox1, 0)
             set_pv_current_for_wallbox(wallbox2, 0)
-            print('===  PV Charge off. Not enough power: ' + str(watt_to_amp(available_power)) + ' A  ===')
+            print('===  PV Charge off. Not enough power: ' + str(watt_to_amp_rounded(available_power)) + ' A  ===')
 
-except:
-    print('Oh error. Something went wrong. ToDo ;)')
-
-# chill for some secs
-time.sleep(5)
+    # chill for some secs
+    print('Calculation cycle ends')
+    print('')
+    time.sleep(5)
+# end loop

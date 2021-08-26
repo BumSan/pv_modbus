@@ -9,8 +9,8 @@ class WBSystemState:
 
     pcb_temperature = 0
 
-    standby_requested: bool = False
-    standby_active: bool = False
+    standby_requested: WBDef = WBDef.DISABLE_STANDBY
+    standby_active: WBDef = WBDef.DISABLE_STANDBY
 
     max_current_requested = 0
     max_current_active = 0

@@ -12,6 +12,9 @@ class WBDef:
     CHARGE_REQUEST1 = 6
     CHARGE_REQUEST2 = 7
 
+    # for testing
+    FAKE_WB_CONNECTION = True
+
 
 class ModbusRTUConfig:
     def __init__(self, mode: str, port: str, timeout: int, baudrate: int, bytesize: int, parity: str, stopbits: int):
@@ -54,10 +57,18 @@ class ModbusRTUHeidelbergWB:
         return read.registers
 
     def get_charging_state(self, slave_id: int):
-        return self._call_remote_input_registers(slave_id, self.wb_read_input.chargingState)
+        if not WBDef.FAKE_WB_CONNECTION:
+            return self._call_remote_input_registers(slave_id, self.wb_read_input.chargingState)
+        else:
+            print('Testmode active')
+            return WBDef.CHARGE_REQUEST1
 
     def get_actual_charge_power(self, slave_id: int):  # returns in Watt
-        return self._call_remote_input_registers(slave_id, self.wb_read_input.actualChargePower)
+        if not WBDef.FAKE_WB_CONNECTION:
+            return self._call_remote_input_registers(slave_id, self.wb_read_input.actualChargePower)
+        else:
+            print('Testmode active')
+            return 100
 
     def get_pcb_temperature(self, slave_id: int):
         return self._call_remote_input_registers(slave_id, self.wb_read_input.PCB_Temperature)
@@ -78,12 +89,16 @@ class ModbusRTUHeidelbergWB:
 
     # do all the write holding registers
     def _call_remote_write_holding_registers(self, register_set: ModbusRegisters, val, slave_id: int):
-        response = self.wb_handle.write_registers(register_set.register
-                                                  , values=val
-                                                  , unit=slave_id)
-        if response.isError():
-            print('Could not write Register' + str(register_set.register))
-        return response
+        if not WBDef.FAKE_WB_CONNECTION:
+            response = self.wb_handle.write_registers(register_set.register
+                                                      , values=val
+                                                      , unit=slave_id)
+            if response.isError():
+                print('Could not write Register' + str(register_set.register))
+            return response
+        else:
+            print('Testmode active')
+            return
 
     def set_standby_control(self, slave_id: int, val):
         return self._call_remote_write_holding_registers(self.wb_write_holding.standByControl, val, slave_id)
@@ -97,4 +112,5 @@ class ModbusRTUHeidelbergWB:
         # convert Ampere to WB values
         val = val*10
         return self._call_remote_write_holding_registers(self.wb_write_holding.failsafeMaxCurrent, val, slave_id)
+
 
