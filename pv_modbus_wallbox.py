@@ -13,7 +13,7 @@ class WBDef:
     CHARGE_REQUEST2 = 7
 
     # for testing
-    FAKE_WB_CONNECTION = True
+    FAKE_WB_CONNECTION = False
 
 
 class ModbusRTUConfig:
