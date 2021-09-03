@@ -25,7 +25,6 @@ class ModbusTCPSolarLog:
                                                           , self.solar_log_register.P_AC.length
                                                           , unit=self.solar_log_cfg.slave_id)
         val = (read.registers[1] << 16) + read.registers[0]
-        print('Actual AC Output: ' + str(val) + ' W')
         return val  # in Watt
 
     def get_actual_consumption_sync_ac(self):
@@ -34,6 +33,5 @@ class ModbusTCPSolarLog:
                                                           , self.solar_log_register.P_AC_Consumption.length
                                                           , unit=self.solar_log_cfg.slave_id)
         val = (read.registers[1] << 16) + read.registers[0]
-        print('Actual AC consumption: ' + str(val) + ' W')
         return val  # in Watt
 

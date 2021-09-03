@@ -108,11 +108,7 @@ def main():
 
     # SolarLog
     config_solar_log = pv_modbus_solarlog.ModbusTCPConfig(SOLARLOG_IP, SOLARLOG_PORT, slave_id=SOLARLOG_SLAVEID)
-    solar_log = pv_modbus_solarlog.ModbusTCPSolarLog(config_solar_log, pv_modbus_solarlog.SolarLogReadInputs())
-
-    # ToDo: Remove this
-    solar_log.get_actual_output_sync_ac()
-    solar_log.get_actual_consumption_sync_ac()
+    solarlog_connection = pv_modbus_solarlog.ModbusTCPSolarLog(config_solar_log, pv_modbus_solarlog.SolarLogReadInputs())
 
     # RTU
     config_wb_heidelberg = pv_modbus_wallbox.ModbusRTUConfig('rtu', '/dev/serial0', timeout=3, baudrate=19200, bytesize=8,
@@ -190,8 +186,10 @@ def main():
                 print('== PV-Charge only active ==')
 
                 # Get the PV data (all in Watt)
-                pv_actual_output = solar_log.get_actual_output_sync_ac()
-                actual_consumption = solar_log.get_actual_consumption_sync_ac()
+                pv_actual_output = solarlog_connection.get_actual_output_sync_ac()
+                print('Actual AC Output (PV): ' + str(pv_actual_output) + ' W')
+                actual_consumption = solarlog_connection.get_actual_consumption_sync_ac()
+                print('Actual AC consumption: ' + str(actual_consumption) + ' W')
 
                 # for testing only
                 if WBDef.FAKE_WB_CONNECTION:
