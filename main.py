@@ -165,7 +165,7 @@ def main():
             # check Switch Position: Charge all or only PV
             # ===================
             # ToDo later. Have the switch static now
-            pv_charge_only = False
+            pv_charge_only = True
 
             # ===================
             # charge max (11 kW overall)
@@ -182,7 +182,7 @@ def main():
                     for wb in wallbox:
                         if is_plug_connected_and_charge_ready(wb):
                             set_current_for_wallbox(wallbox_connection, wb, WB_SYSTEM_MAX_CURRENT // connected)
-                            print('Wallbox ID ' + str(wb.slave_id) + 'current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected) + ' A')
+                            print('Wallbox ID' + str(wb.slave_id) + ' current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected) + ' A')
             else:
                 # ===================
                 # Charge only via PV
@@ -228,13 +228,16 @@ def main():
                     one_wb_already_used = False
                     for wb in wallbox:
                         if one_wb_already_used:
-                            set_pv_current_for_wallbox(wb, 0)
-                            print('wallbox ID ' + str(wb.slave_id) + 'PV current set to: 0 A')
+                            set_pv_current_for_wallbox(wallbox_connection, wb, 0)
+                            print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: 0 A')
                         elif is_plug_connected_and_charge_ready(wb):
                             set_pv_current_for_wallbox(wallbox_connection, wb, watt_to_amp_rounded(available_power))
                             one_wb_already_used = True
-                            print('wallbox ID ' + str(wb.slave_id) + 'PV current set to: ' + str(
+                            print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: ' + str(
                                 watt_to_amp_rounded(available_power)) + ' A')
+                        else:
+                            set_pv_current_for_wallbox(wallbox_connection, wb, 0)
+                            print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: 0 A')
                 else:
                     # stop PV charging
                     for wb in wallbox:
