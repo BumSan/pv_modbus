@@ -36,10 +36,10 @@ MIN_WAIT_BEFORE_PV_ON = 2 * 60  # secs. We want to wait at least for x secs befo
 
 
 # check if we have to activate standby
-def set_standby_if_required(wallbox_handle, wallbox: WBSystemState):
+def set_standby_if_required(wallbox_connection, wallbox: WBSystemState):
     if wallbox.charge_state == WBDef.CHARGE_NOPLUG1 or wallbox.charge_state == WBDef.CHARGE_NOPLUG2:
         if wallbox.standby_active == WBDef.DISABLE_STANDBY:
-            wallbox_handle.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
+            wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
 
 
 def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
@@ -47,15 +47,22 @@ def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
 
 
 # wrapper so we can filter and work on min time
-def set_current_for_wallbox(wallbox_handle, wallbox: WBSystemState, current):
-    wallbox_handle.set_max_current(wallbox.slave_id, current)
+def set_current_for_wallbox(wallbox_connection, wallbox: WBSystemState, current):
+    wallbox_connection.set_max_current(wallbox.slave_id, current)
 
 
+# ToDo: Not happy with this function. too complex and weird
+# ToDo: also wrong: we can´t switch off a WB which was not on for long enough, even if other WB is running now
 # wrapper so we can filter and work on min time
-def set_pv_current_for_wallbox(wallbox_handle, wallbox: WBSystemState, current):
+def set_pv_current_for_wallbox(wallbox_connection, wallbox: WBSystemState, current):
     current_allowed = False
+    lock_out_other_wallboxes = False
 
-    if wallbox.pv_charge_active is False and current > 0:  # === switch it on ===
+    # whatever we want, if there is no plug or charge request -> current should be off immediately
+    if not is_plug_connected_and_charge_ready(wallbox):
+        current_allowed = True
+        current = 0
+    elif wallbox.pv_charge_active is False and current > 0:  # === switch it on ===
         # check if allowed (was off for long enough)
         if wallbox.last_charge_deactivation == 0:
             # was never deactivated, so go ahead with charge and set timestamps for activation
@@ -82,12 +89,16 @@ def set_pv_current_for_wallbox(wallbox_handle, wallbox: WBSystemState, current):
     elif wallbox.pv_charge_active is True and current > 0:  # === keep it on ===
         current_allowed = True
 
+    # set current if ok; and set wallbox state correctly
     if current_allowed:
-        wallbox_handle.set_max_current(wallbox.slave_id, current)
+        wallbox_connection.set_max_current(wallbox.slave_id, current)
         if current > 0:
             wallbox.pv_charge_active = True
+            lock_out_other_wallboxes = True  # make sure outside that we always only assign PV to one WB
         else:
             wallbox.pv_charge_active = False
+
+    return lock_out_other_wallboxes
 
 
 def watt_to_amp(val_watt: int) -> float:
@@ -136,7 +147,7 @@ def main():
     while True:
 
         try:
-            # if we lose communication to the WB, assume we lose it to both; and split max current of 16A evenly
+            # if we lose communication to the WB, assume we lose it to all; and split max current of 16A evenly
             for wb in wallbox:
                 wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
         except pymodbus.exceptions.ConnectionException:
@@ -147,8 +158,6 @@ def main():
         print(' ')
         print('Next Calculation cycle starts')
         print(datetime.datetime.now())
-
-        # ToDo: Read out all; to update our WB1+2 states
 
         try:
             # check all WB for charge plug and charge request
@@ -162,6 +171,9 @@ def main():
             # ===================
             # ToDo later. Have the switch static now
             pv_charge_only = True
+
+            # For later: Would be cool to have it defined per Wallbox. e.g. one car can always charge fully,
+            # the other one only when sun shines
 
             # ===================
             # charge max (11 kW overall)
@@ -229,8 +241,9 @@ def main():
                             set_pv_current_for_wallbox(wallbox_connection, wb, 0)
                             print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: 0 A')
                         elif is_plug_connected_and_charge_ready(wb):
-                            set_pv_current_for_wallbox(wallbox_connection, wb, watt_to_amp_rounded(available_power))
-                            one_wb_already_used = True
+                            one_wb_already_used = set_pv_current_for_wallbox(wallbox_connection
+                                                                             , wb
+                                                                             , watt_to_amp_rounded(available_power))
                             print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: ' + str(
                                 watt_to_amp_rounded(available_power)) + ' A')
                         else:
@@ -239,7 +252,7 @@ def main():
                 else:
                     # stop PV charging
                     for wb in wallbox:
-                        set_pv_current_for_wallbox(wb, 0)
+                        set_pv_current_for_wallbox(wallbox_connection, wb, 0)
                     print('===  PV Charge off. Not enough power ===')
 
             # chill for some secs
