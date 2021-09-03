@@ -12,10 +12,15 @@ logging.basicConfig()
 log = logging.getLogger()
 log.setLevel(logging.FATAL)
 
+SOLARLOG_IP = '192.168.178.103'
+SOLARLOG_PORT = 502
+SOLARLOG_SLAVEID = 0x01
+
 WB1_SLAVEID = 1
 WB2_SLAVEID = 2
 WB_SYSTEM_MAX_CURRENT = 16  # Ampere
 WB_MIN_CURRENT = 6  # Ampere
+
 PV_CHARGE_AMP_TOLERANCE = 2  # Amp -> if we do not have enough PV power to reach the WB min, use this threshold value
 # and take up to x Amp from grid
 
@@ -31,10 +36,10 @@ MIN_WAIT_BEFORE_PV_ON = 2 * 60  # secs. We want to wait at least for x secs befo
 
 
 # check if we have to activate standby
-def do_we_need_to_standby(wallbox: WBSystemState):
+def set_standby_if_required(wallbox_handle, wallbox: WBSystemState):
     if wallbox.charge_state == WBDef.CHARGE_NOPLUG1 or wallbox.charge_state == WBDef.CHARGE_NOPLUG2:
         if wallbox.standby_active == WBDef.DISABLE_STANDBY:
-            wb_heidelberg.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
+            wallbox_handle.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
 
 
 def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
@@ -42,12 +47,12 @@ def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
 
 
 # wrapper so we can filter and work on min time
-def set_current_for_wallbox(wallbox: WBSystemState, current):
-    wb_heidelberg.set_max_current(wallbox.slave_id, current)
+def set_current_for_wallbox(wallbox_handle, wallbox: WBSystemState, current):
+    wallbox_handle.set_max_current(wallbox.slave_id, current)
 
 
 # wrapper so we can filter and work on min time
-def set_pv_current_for_wallbox(wallbox: WBSystemState, current):
+def set_pv_current_for_wallbox(wallbox_handle, wallbox: WBSystemState, current):
     current_allowed = False
 
     if wallbox.pv_charge_active is False and current > 0:  # === switch it on ===
@@ -78,7 +83,7 @@ def set_pv_current_for_wallbox(wallbox: WBSystemState, current):
         current_allowed = True
 
     if current_allowed:
-        wb_heidelberg.set_max_current(wallbox.slave_id, current)
+        wallbox_handle.set_max_current(wallbox.slave_id, current)
         if current > 0:
             wallbox.pv_charge_active = True
         else:
@@ -102,7 +107,7 @@ def main():
     wallbox = [WBSystemState(WB1_SLAVEID), WBSystemState(WB2_SLAVEID)]
 
     # SolarLog
-    config_solar_log = pv_modbus_solarlog.ModbusTCPConfig('192.168.178.103', 502, slave_id=0x01)
+    config_solar_log = pv_modbus_solarlog.ModbusTCPConfig(SOLARLOG_IP, SOLARLOG_PORT, slave_id=SOLARLOG_SLAVEID)
     solar_log = pv_modbus_solarlog.ModbusTCPSolarLog(config_solar_log, pv_modbus_solarlog.SolarLogReadInputs())
 
     # ToDo: Remove this
@@ -113,11 +118,11 @@ def main():
     config_wb_heidelberg = pv_modbus_wallbox.ModbusRTUConfig('rtu', '/dev/serial0', timeout=3, baudrate=19200, bytesize=8,
                                                              parity='E',
                                                              stopbits=1)
-    wb_heidelberg = pv_modbus_wallbox.ModbusRTUHeidelbergWB(wb_config=config_wb_heidelberg
-                                                            , wb_read_input=pv_modbus_wallbox.HeidelbergWBReadInputs()
-                                                            , wb_read_holding=pv_modbus_wallbox.HeidelbergWBReadHolding()
-                                                            , wb_write_holding=pv_modbus_wallbox.HeidelbergWBWriteHolding())
-    wb_heidelberg.connect_wb_heidelberg()
+    wallbox_connection = pv_modbus_wallbox.ModbusRTUHeidelbergWB(wb_config=config_wb_heidelberg
+                                                                 , wb_read_input=pv_modbus_wallbox.HeidelbergWBReadInputs()
+                                                                 , wb_read_holding=pv_modbus_wallbox.HeidelbergWBReadHolding()
+                                                                 , wb_write_holding=pv_modbus_wallbox.HeidelbergWBWriteHolding())
+    wallbox_connection.connect_wb_heidelberg()
 
 
 
@@ -136,8 +141,8 @@ def main():
 
         try:
             # if we lose communication to the WB, assume we lose it to both; and split max current of 16A evenly
-            wb_heidelberg.set_failsafe_max_current(slave_id=wallbox[0].slave_id, val=8)
-            wb_heidelberg.set_failsafe_max_current(slave_id=wallbox[1].slave_id, val=8)
+            for wb in wallbox:
+                wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
         except pymodbus.exceptions.ConnectionException:
             print('Connection error. Could not connect to WB. Trying again.')
             time.sleep(5)
@@ -153,8 +158,8 @@ def main():
             # check all WB for charge plug and charge request
             # check for standby activation (.. saves 4 Watt if no Car is plugged in)
             for wb in wallbox:
-                wb.charge_state = wb_heidelberg.get_charging_state(wb.slave_id)
-                do_we_need_to_standby(wb)
+                wb.charge_state = wallbox_connection.get_charging_state(wb.slave_id)
+                set_standby_if_required(wallbox_connection, wb)
 
             # ===================
             # check Switch Position: Charge all or only PV
@@ -176,7 +181,7 @@ def main():
                 if connected > 0:
                     for wb in wallbox:
                         if is_plug_connected_and_charge_ready(wb):
-                            set_current_for_wallbox(wb, WB_SYSTEM_MAX_CURRENT // connected)
+                            set_current_for_wallbox(wallbox_connection, wb, WB_SYSTEM_MAX_CURRENT // connected)
                             print('Wallbox ID ' + str(wb.slave_id) + 'current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected) + ' A')
             else:
                 # ===================
@@ -196,7 +201,7 @@ def main():
                 already_used_charging_power_for_car = 0
                 for wb in wallbox:
                     if is_plug_connected_and_charge_ready(wb):
-                        val = wb_heidelberg.get_actual_charge_power(wb.slave_id)
+                        val = wallbox_connection.get_actual_charge_power(wb.slave_id)
                         already_used_charging_power_for_car += val
                 print('Currently used power for charging: ' + str(already_used_charging_power_for_car) + ' Watt')
 
@@ -226,7 +231,7 @@ def main():
                             set_pv_current_for_wallbox(wb, 0)
                             print('wallbox ID ' + str(wb.slave_id) + 'PV current set to: 0 A')
                         elif is_plug_connected_and_charge_ready(wb):
-                            set_pv_current_for_wallbox(wb, watt_to_amp_rounded(available_power))
+                            set_pv_current_for_wallbox(wallbox_connection, wb, watt_to_amp_rounded(available_power))
                             one_wb_already_used = True
                             print('wallbox ID ' + str(wb.slave_id) + 'PV current set to: ' + str(
                                 watt_to_amp_rounded(available_power)) + ' A')
