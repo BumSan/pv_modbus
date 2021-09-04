@@ -27,8 +27,8 @@ PV_CHARGE_AMP_TOLERANCE = 2  # Amp -> if we do not have enough PV power to reach
 # and take up to x Amp from grid
 
 # time constraints
-MIN_TIME_PV_CHARGE = 5 * 60  # secs. We want to charge at least for x secs before switch on->off (PV charge related)
-MIN_WAIT_BEFORE_PV_ON = 2 * 60  # secs. We want to wait at least for x secs before switch off->on (PV charge related)
+MIN_TIME_PV_CHARGE = 1 * 60  # secs. We want to charge at least for x secs before switch on->off (PV charge related)
+MIN_WAIT_BEFORE_PV_ON = 1 * 60  # secs. We want to wait at least for x secs before switch off->on (PV charge related)
 
 
 # Must have Features
@@ -60,6 +60,7 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
     # are any of the Wallboxes already charging with PV? then we update these first
     for wb in wallbox:
         if wb.pv_charge_active:
+            print('Working on already active WBs first')
             # limit the current to max value per WB
             if available_current > WB_SYSTEM_MAX_CURRENT:
                 used_current = WB_SYSTEM_MAX_CURRENT
@@ -70,16 +71,20 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
             if used_current >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
                 # enough power. we already charge so no check required
                 wallbox_connection.set_max_current(wb.slave_id, used_current)
+                print('Setting Wallbox ID' + str(wb.slave_id) + ' to ' + str(used_current) + ' A')
             else:  # we do not have enough power. Check if we can deactivate this WB
                 if is_pv_charge_deactivation_allowed(wb):
                     used_current = 0
                     wallbox_connection.set_max_current(wb.slave_id, used_current)
+                    wb.pv_charge_active = False
                 else:  # not allowed, so reduce it to min value for now and try again later
                     used_current = WB_MIN_CURRENT
                     wallbox_connection.set_max_current(wb.slave_id, used_current)
+                    print('Charge deactivation for Wallbox ID' + str(wb.slave_id) + ' not allowed due to time constraints')
 
             # keep track of the the current contingent
             available_current -= used_current
+            print ('Still Available current: ' + str(available_current) + ' A')
 
     # 2nd step: if we have enough power left, we can check to active WBs that do not charge yet
     for wb in wallbox:
@@ -94,8 +99,13 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                 # check if we can activate this WB. If not we just try the next one
                 if is_pv_charge_activation_allowed(wb):
                     wallbox_connection.set_max_current(wb.slave_id, used_current)
+                    print('Setting Wallbox ID' + str(wb.slave_id) + ' to ' + str(used_current) + ' A')
+                    wb.pv_charge_active = True
                     # keep track of the the current contingent
                     available_current -= used_current
+                    print('Still Available current: ' + str(available_current) + ' A')
+                else:
+                    print('Charge activation for Wallbox ID' + str(wb.slave_id) + ' not allowed due to time constraints')
         else:  # not enough power left
             break
 
