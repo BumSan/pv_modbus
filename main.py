@@ -1,3 +1,5 @@
+from typing import List
+
 import pv_modbus_solarlog
 import pv_modbus_wallbox
 from pv_modbus_wallbox import WBDef
@@ -18,8 +20,8 @@ SOLARLOG_SLAVEID = 0x01
 
 WB1_SLAVEID = 1
 WB2_SLAVEID = 2
-WB_SYSTEM_MAX_CURRENT = 16  # Ampere
-WB_MIN_CURRENT = 6  # Ampere
+WB_SYSTEM_MAX_CURRENT = 16.0  # Ampere
+WB_MIN_CURRENT = 6.0  # Ampere
 
 PV_CHARGE_AMP_TOLERANCE = 2  # Amp -> if we do not have enough PV power to reach the WB min, use this threshold value
 # and take up to x Amp from grid
@@ -51,54 +53,79 @@ def set_current_for_wallbox(wallbox_connection, wallbox: WBSystemState, current)
     wallbox_connection.set_max_current(wallbox.slave_id, current)
 
 
-# ToDo: Not happy with this function. too complex and weird
-# ToDo: also wrong: we can´t switch off a WB which was not on for long enough, even if other WB is running now
-# wrapper so we can filter and work on min time
-def set_pv_current_for_wallbox(wallbox_connection, wallbox: WBSystemState, current):
-    current_allowed = False
-    lock_out_other_wallboxes = False
+def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], available_current):
 
-    # whatever we want, if there is no plug or charge request -> current should be off immediately
-    if not is_plug_connected_and_charge_ready(wallbox):
-        current_allowed = True
-        current = 0
-    elif wallbox.pv_charge_active is False and current > 0:  # === switch it on ===
-        # check if allowed (was off for long enough)
-        if wallbox.last_charge_deactivation == 0:
-            # was never deactivated, so go ahead with charge and set timestamps for activation
-            current_allowed = True
-            wallbox.last_charge_activation = datetime.datetime.now()
-        else:
-            # check last time it was switched off, so we can keep minimum time off
-            time_diff = datetime.datetime.now() - wallbox.last_charge_deactivation
-            if time_diff.total_seconds() > MIN_WAIT_BEFORE_PV_ON:
-                current_allowed = True
-                wallbox.last_charge_activation = datetime.datetime.now()
+    used_current = 0.0
+
+    # are any of the Wallboxes already charging with PV? then we update these first
+    for wb in wallbox:
+        if wb.pv_charge_active:
+            # limit the current to max value per WB
+            if available_current > WB_SYSTEM_MAX_CURRENT:
+                used_current = WB_SYSTEM_MAX_CURRENT
             else:
-                current_allowed = False  # will be tried again later in another cycle
-    elif wallbox.pv_charge_active is False and current == 0:  # === keep it off ===
-        current_allowed = False  # is off anyway, don´t change
-    elif wallbox.pv_charge_active is True and current == 0:  # === switch it off ===
-        # check last time it was switched on, so we can keep minimum time on
-        time_diff = datetime.datetime.now() - wallbox.last_charge_activation
-        if time_diff.total_seconds() > MIN_TIME_PV_CHARGE:
-            current_allowed = True
-            wallbox.last_charge_deactivation = datetime.datetime.now()
-        else:
-            current_allowed = False  # will be tried again later in another cycle
-    elif wallbox.pv_charge_active is True and current > 0:  # === keep it on ===
-        current_allowed = True
+                used_current = available_current
 
-    # set current if ok; and set wallbox state correctly
-    if current_allowed:
-        wallbox_connection.set_max_current(wallbox.slave_id, current)
-        if current > 0:
-            wallbox.pv_charge_active = True
-            lock_out_other_wallboxes = True  # make sure outside that we always only assign PV to one WB
-        else:
-            wallbox.pv_charge_active = False
+            # check if we have enough power for this WB. If not we try to switch it off
+            if used_current >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
+                # enough power. we already charge so no check required
+                wallbox_connection.set_max_current(wb.slave_id, used_current)
+            else:  # we do not have enough power. Check if we can deactivate this WB
+                if is_pv_charge_deactivation_allowed(wb):
+                    used_current = 0
+                    wallbox_connection.set_max_current(wb.slave_id, used_current)
+                else:  # not allowed, so reduce it to min value for now and try again later
+                    used_current = WB_MIN_CURRENT
+                    wallbox_connection.set_max_current(wb.slave_id, used_current)
 
-    return lock_out_other_wallboxes
+            # keep track of the the current contingent
+            available_current -= used_current
+
+    # 2nd step: if we have enough power left, we can check to active WBs that do not charge yet
+    for wb in wallbox:
+        if available_current >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
+            if not wb.pv_charge_active:
+                # limit the current to max value per WB
+                if available_current > WB_SYSTEM_MAX_CURRENT:
+                    used_current = WB_SYSTEM_MAX_CURRENT
+                else:
+                    used_current = available_current
+
+                # check if we can activate this WB. If not we just try the next one
+                if is_pv_charge_activation_allowed(wb):
+                    wallbox_connection.set_max_current(wb.slave_id, used_current)
+                    # keep track of the the current contingent
+                    available_current -= used_current
+        else:  # not enough power left
+            break
+
+
+# check if WB was inactive for long enough (to avoid fast switch on/off)
+def is_pv_charge_activation_allowed(wallbox) -> bool:
+    time_diff = datetime.datetime.now() - wallbox.last_charge_deactivation
+    return time_diff.total_seconds() > MIN_WAIT_BEFORE_PV_ON
+
+
+# check if WB was active for long enough (to avoid fast switch on/off)
+def is_pv_charge_deactivation_allowed(wallbox) -> bool:
+    time_diff = datetime.datetime.now() - wallbox.last_charge_activation
+    return time_diff.total_seconds() > MIN_TIME_PV_CHARGE
+
+
+def deactivate_grid_charge(wallbox_connection, wallbox: List[WBSystemState]):
+    for wb in wallbox:
+        if wb.grid_charge_active:
+            wallbox_connection.set_max_current(wb.slave_id, 0)
+            wb.grid_charge_active = False
+            wb.last_charge_deactivation = datetime.datetime.now()
+
+
+def deactivate_pv_charge(wallbox_connection, wallbox: List[WBSystemState]):
+    for wb in wallbox:
+        if wb.pv_charge_active:
+            wallbox_connection.set_max_current(wb.slave_id, 0)
+            wb.pv_charge_active = False
+            wb.last_charge_deactivation = datetime.datetime.now()
 
 
 def watt_to_amp(val_watt: int) -> float:
@@ -144,6 +171,12 @@ def main():
     # ->  if already charging from PV, keep on for min 5min)
     # loop from here
 
+    # init last charge
+    for wb in wallbox:
+        wb.last_charge_activation = datetime.datetime.now()
+        wb.last_charge_deactivation = datetime.datetime.now()
+
+    # cowboy lucky loop
     while True:
 
         try:
@@ -179,6 +212,7 @@ def main():
             # charge max (11 kW overall)
             # ===================
             if not pv_charge_only:
+
                 # check how many Plugs are connected in correct state
                 connected = 0
                 for wb in wallbox:
@@ -188,14 +222,25 @@ def main():
                 # assign respective power to the wallboxes, evenly
                 if connected > 0:
                     for wb in wallbox:
-                        if is_plug_connected_and_charge_ready(wb):
+                        if is_plug_connected_and_charge_ready(wb):  # connected
                             set_current_for_wallbox(wallbox_connection, wb, WB_SYSTEM_MAX_CURRENT // connected)
                             print('Wallbox ID' + str(wb.slave_id) + ' current set to ' + str(WB_SYSTEM_MAX_CURRENT // connected) + ' A')
+                            if not wb.grid_charge_active:
+                                wb.grid_charge_active = True
+                                wb.last_charge_activation = datetime.datetime.now()
+                        else:  # disconnected
+                            if wb.grid_charge_active:
+                                wb.grid_charge_active = False
+                                wb.last_charge_deactivation = datetime.datetime.now()
             else:
                 # ===================
                 # Charge only via PV
                 # ===================
                 print('== PV-Charge only active ==')
+
+                # make sure that all active WBs get deactivated first when switching to PV
+                # this could be more intelligent, just brute force make sure that we have a clean state to start from
+                deactivate_grid_charge(wallbox_connection, wallbox)
 
                 # Get the PV data (all in Watt)
                 pv_actual_output = solarlog_connection.get_actual_output_sync_ac()
@@ -235,25 +280,7 @@ def main():
                 # check for enough power to use PV
                 if watt_to_amp(available_power) >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
                     # Charge galore
-                    one_wb_already_used = False
-                    for wb in wallbox:
-                        if one_wb_already_used:
-                            set_pv_current_for_wallbox(wallbox_connection, wb, 0)
-                            print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: 0 A')
-                        elif is_plug_connected_and_charge_ready(wb):
-                            one_wb_already_used = set_pv_current_for_wallbox(wallbox_connection
-                                                                             , wb
-                                                                             , watt_to_amp_rounded(available_power))
-                            print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: ' + str(
-                                watt_to_amp_rounded(available_power)) + ' A')
-                        else:
-                            set_pv_current_for_wallbox(wallbox_connection, wb, 0)
-                            print('Wallbox ID' + str(wb.slave_id) + ' PV current set to: 0 A')
-                else:
-                    # stop PV charging
-                    for wb in wallbox:
-                        set_pv_current_for_wallbox(wallbox_connection, wb, 0)
-                    print('===  PV Charge off. Not enough power ===')
+                    activate_pv_charge(wallbox_connection, wallbox, watt_to_amp_rounded(available_power))
 
             # chill for some secs
             print('Calculation cycle ends')

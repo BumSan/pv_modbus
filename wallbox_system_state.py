@@ -20,6 +20,7 @@ class WBSystemState:
     max_failsafe_current_active = 0
 
     pv_charge_active: bool = False
+    grid_charge_active: bool = False
 
     # datetime when the WB started charging
     last_charge_activation: datetime.datetime = 0
