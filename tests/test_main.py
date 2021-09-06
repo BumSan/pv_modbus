@@ -2,6 +2,7 @@ from wallbox_system_state import WBSystemState
 from pv_modbus_wallbox import WBDef
 import pv_modbus_wallbox
 from main import *
+import pytest
 
 
 def test_is_plug_connected_and_charge_ready():
@@ -41,150 +42,132 @@ def reset_wallboxes(wallboxes: List[WBSystemState]):
         wb.max_current_active = 0
 
 
-def test_activate_pv_charge(mocker):
+@pytest.fixture
+def setup_wallboxes_off_state(mocker):
     mocker.patch(
         'pv_modbus.main.pv_modbus_wallbox.ModbusRTUHeidelbergWB.set_max_current',
         return_value=True
     )
 
-    connection = create_fake_wallbox_connection()
     wallbox = [WBSystemState(1), WBSystemState(2)]
     # init last charge
     for wb in wallbox:
         wb.last_charge_activation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_TIME_PV_CHARGE + 1)
         wb.last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_WAIT_BEFORE_PV_ON + 1)
+        wb.charge_state = WBDef.CHARGE_REQUEST1
 
-    # have charge request active for all WBs
-    wallbox[0].charge_state = WBDef.CHARGE_REQUEST1
-    wallbox[1].charge_state = WBDef.CHARGE_REQUEST1
+    return wallbox
 
+
+@pytest.fixture
+def setup_wallboxes_pv_on(mocker):
+    mocker.patch(
+        'pv_modbus.main.pv_modbus_wallbox.ModbusRTUHeidelbergWB.set_max_current',
+        return_value=True
+    )
+
+    wallbox = [WBSystemState(1), WBSystemState(2)]
+    # init last charge
+    for wb in wallbox:
+        wb.last_charge_activation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_TIME_PV_CHARGE + 1)
+        wb.last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_WAIT_BEFORE_PV_ON + 1)
+        wb.charge_state = WBDef.CHARGE_REQUEST1
+        wb.pv_charge_active = True
+
+    return wallbox
+
+
+@pytest.mark.activate
+@pytest.mark.parametrize(
+    "current,wb1_charge,wb1_current,wb2_charge,wb2_current",
+    [
+        (0, False, 0, False, 0)
+        , (WB_MIN_CURRENT, True, WB_MIN_CURRENT, False, 0)
+        , (WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE, True, WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE, False, 0)
+        , (WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE-0.1, False, 0, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT+0.1, True, WB_SYSTEM_MAX_CURRENT, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT*2, True, WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT)
+        , (WB_SYSTEM_MAX_CURRENT*3, True, WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT)
+     ])
+def test_activate_pv_charge_with_different_currents_from_off_state(setup_wallboxes_off_state, current, wb1_charge, wb1_current, wb2_charge, wb2_current):
+    """use different currents (min, max, <min, > max) from Wallbox off state"""
+    connection = create_fake_wallbox_connection()
+    wallbox = setup_wallboxes_off_state
+
+    # try charging less than min current - tolerance
+    available_current = current
     print(' ')
-    print('WBs from off state')
-
-    # 1 try charging min current
-    available_current = WB_MIN_CURRENT
     activate_pv_charge(connection, wallbox, available_current)
-    assert wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == WB_MIN_CURRENT
+    assert wallbox[0].pv_charge_active == wb1_charge
+    assert wallbox[0].max_current_active == wb1_current
+    assert wallbox[1].pv_charge_active == wb2_charge
+    assert wallbox[1].max_current_active == wb2_current
 
-    # reset both WBs
-    reset_wallboxes(wallbox)
 
-    # 2 try charging min current - tolerance. should work for WB1
-    available_current = WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE
-    activate_pv_charge(connection, wallbox, available_current)
-    assert wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == available_current
+@pytest.mark.activate
+@pytest.mark.parametrize(
+    "current,wb1_charge,wb1_current,wb2_charge,wb2_current",
+    [
+        (0, False, 0, False, 0)
+        , (WB_MIN_CURRENT, True, WB_MIN_CURRENT, False, 0)
+        , (WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE, True, WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE, False, 0)
+        , (WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE-0.1, False, 0, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT+0.1, True, WB_SYSTEM_MAX_CURRENT, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT*2, True, WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT)
+        , (WB_SYSTEM_MAX_CURRENT*3, True, WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT)
+     ])
+def test_activate_pv_charge_with_different_currents_from_on_state(setup_wallboxes_pv_on, current, wb1_charge, wb1_current, wb2_charge, wb2_current):
+    """use different currents (min, max, <min, > max) from Wallbox on state"""
+    connection = create_fake_wallbox_connection()
+    wallbox = setup_wallboxes_pv_on
 
-    # reset both WBs
-    reset_wallboxes(wallbox)
-
-    # 3 try charging less than min current - tolerance
-    available_current = WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE - 0.1
-    activate_pv_charge(connection, wallbox, available_current)
-    assert not wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == 0
-
-    reset_wallboxes(wallbox)
-
-    # 4 try charging more than WB_SYSTEM_MAX_CURRENT
-    available_current = WB_SYSTEM_MAX_CURRENT + 0.1
-    activate_pv_charge(connection, wallbox, available_current)
-    assert wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == 16
-    assert not wallbox[1].pv_charge_active
-    assert wallbox[1].max_current_active == 0
-
-    reset_wallboxes(wallbox)
-
-    # 5try charging WB_SYSTEM_MAX_CURRENT*2
-    available_current = WB_SYSTEM_MAX_CURRENT * 2
-    activate_pv_charge(connection, wallbox, available_current)
-    assert wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == 16
-    assert wallbox[1].pv_charge_active
-    assert wallbox[1].max_current_active == 16
-
-    reset_wallboxes(wallbox)
-
-    # 6 try charging WB_SYSTEM_MAX_CURRENT*3
-    available_current = WB_SYSTEM_MAX_CURRENT * 3
-    activate_pv_charge(connection, wallbox, available_current)
-    assert wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == 16
-    assert wallbox[1].pv_charge_active
-    assert wallbox[1].max_current_active == 16
-
-    reset_wallboxes(wallbox)
-
-    # 7 try charging WB_SYSTEM_MAX_CURRENT*3 but without charge requests
-    wallbox[0].charge_state = WBDef.CHARGE_NOPLUG1
-    wallbox[1].charge_state = WBDef.CHARGE_NOPLUG1
-
-    available_current = WB_SYSTEM_MAX_CURRENT * 3
-    activate_pv_charge(connection, wallbox, available_current)
-    assert not wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == 0
-    assert not wallbox[1].pv_charge_active
-    assert wallbox[1].max_current_active == 0
-
-    reset_wallboxes(wallbox)
-
-    # have charge request active for all WBs
-    wallbox[0].charge_state = WBDef.CHARGE_REQUEST1
-    wallbox[1].charge_state = WBDef.CHARGE_REQUEST1
-
-    # now try with already active wallbox
+    # try charging less than min current - tolerance
+    available_current = current
     print(' ')
-    print('Already active WBs')
-    wallbox[0].pv_charge_active = True
-    wallbox[0].max_current_active == 4
-
-    # 1 try charging min current - tolerance. should work for WB1
-    available_current = WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE
     activate_pv_charge(connection, wallbox, available_current)
-    assert wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == available_current
-    assert not wallbox[1].pv_charge_active
-    assert wallbox[1].max_current_active == 0
+    assert wallbox[0].pv_charge_active == wb1_charge
+    assert wallbox[0].max_current_active == wb1_current
+    assert wallbox[1].pv_charge_active == wb2_charge
+    assert wallbox[1].max_current_active == wb2_current
 
-    reset_wallboxes(wallbox)
 
-    # 2 now try with already active wallbox + adtl current
-    wallbox[0].pv_charge_active = True
-    wallbox[0].max_current_active == 4
+@pytest.mark.activate
+@pytest.mark.parametrize(
+    "current,wb1_charge,wb1_current,wb2_charge,wb2_current",
+    [
+        (0, False, 0, False, 0)
+        , (WB_MIN_CURRENT, False, 0, False, 0)
+        , (WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE, False, 0, False, 0)
+        , (WB_MIN_CURRENT-PV_CHARGE_AMP_TOLERANCE-0.1, False, 0, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT, False, 0, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT+0.1, False, 0, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT*2, False, 0, False, 0)
+        , (WB_SYSTEM_MAX_CURRENT*3, False, 0, False, 0)
+     ])
+def test_activate_pv_charge_with_different_currents_without_plug(setup_wallboxes_pv_on, current, wb1_charge, wb1_current, wb2_charge, wb2_current):
+    """use different currents (min, max, <min, > max) without charging plug connected"""
+    connection = create_fake_wallbox_connection()
+    wallbox = setup_wallboxes_pv_on
 
-    # 2 try charging min current - tolerance. should work for WB1
-    available_current = WB_SYSTEM_MAX_CURRENT * 2
+    for wb in wallbox:
+        wb.charge_state = WBDef.CHARGE_NOPLUG1
+
+    # try charging less than min current - tolerance
+    available_current = current
+    print(' ')
     activate_pv_charge(connection, wallbox, available_current)
-    assert wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == WB_SYSTEM_MAX_CURRENT
-    assert wallbox[1].pv_charge_active
-    assert wallbox[1].max_current_active == WB_SYSTEM_MAX_CURRENT
+    assert wallbox[0].pv_charge_active == wb1_charge
+    assert wallbox[0].max_current_active == wb1_current
+    assert wallbox[1].pv_charge_active == wb2_charge
+    assert wallbox[1].max_current_active == wb2_current
 
-    reset_wallboxes(wallbox)
 
-    # 2 try charging WB_SYSTEM_MAX_CURRENT*3 but without charge requests
-    wallbox[0].pv_charge_active = True
-    wallbox[0].max_current_active == WB_SYSTEM_MAX_CURRENT
-    wallbox[1].pv_charge_active = True
-    wallbox[1].max_current_active == WB_SYSTEM_MAX_CURRENT
+def test_activate_pv_charge_check_time_dependencies(setup_wallboxes_off_state):
 
-    wallbox[0].charge_state = WBDef.CHARGE_NOPLUG1
-    wallbox[1].charge_state = WBDef.CHARGE_NOPLUG1
-    available_current = WB_SYSTEM_MAX_CURRENT * 2
-
-    activate_pv_charge(connection, wallbox, available_current)
-    assert not wallbox[0].pv_charge_active
-    assert wallbox[0].max_current_active == 0
-    assert not wallbox[1].pv_charge_active
-    assert wallbox[1].max_current_active == 0
-
-    reset_wallboxes(wallbox)
-
-    # have charge request active for all WBs
-    wallbox[0].charge_state = WBDef.CHARGE_REQUEST1
-    wallbox[1].charge_state = WBDef.CHARGE_REQUEST1
+    connection = create_fake_wallbox_connection()
+    wallbox = setup_wallboxes_off_state
 
     # now check the time dependencies
     print(' ')
@@ -206,8 +189,8 @@ def test_activate_pv_charge(mocker):
 
     # now some time has passed
     print(' ')
-    wallbox[0].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_TIME_PV_CHARGE + 1)
-    wallbox[1].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_TIME_PV_CHARGE + 1)
+    wallbox[0].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_WAIT_BEFORE_PV_ON + 1)
+    wallbox[1].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_WAIT_BEFORE_PV_ON + 1)
 
     activate_pv_charge(connection, wallbox, available_current)
     assert wallbox[0].pv_charge_active
@@ -246,22 +229,35 @@ def test_activate_pv_charge(mocker):
     assert not wallbox[1].pv_charge_active
     assert wallbox[1].max_current_active == 0
 
+    reset_wallboxes(wallbox)
 
-def test_activate_grid_charge(mocker):
-    mocker.patch(
-        'pv_modbus.main.pv_modbus_wallbox.ModbusRTUHeidelbergWB.set_max_current',
-        return_value=True
-    )
+    # deactivate wallboxes right after they were activated
+    print(' ')
+    wallbox[0].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_WAIT_BEFORE_PV_ON + 1)
+    wallbox[1].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_WAIT_BEFORE_PV_ON + 1)
+
+    available_current = WB_SYSTEM_MAX_CURRENT*2
+    activate_pv_charge(connection, wallbox, available_current)
+
+    assert wallbox[0].pv_charge_active
+    assert wallbox[0].max_current_active == WB_SYSTEM_MAX_CURRENT
+    assert wallbox[1].pv_charge_active
+    assert wallbox[1].max_current_active == WB_SYSTEM_MAX_CURRENT
+
+    available_current = 0
+    activate_pv_charge(connection, wallbox, available_current)
+
+    assert wallbox[0].pv_charge_active
+    assert wallbox[0].max_current_active == WB_MIN_CURRENT
+    assert wallbox[1].pv_charge_active
+    assert wallbox[1].max_current_active == WB_MIN_CURRENT
+
+
+def test_activate_grid_charge(setup_wallboxes_off_state):
 
     connection = create_fake_wallbox_connection()
-    wallbox = [WBSystemState(1), WBSystemState(2)]
-    for wb in wallbox:
-        wb.last_charge_activation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_TIME_PV_CHARGE + 1)
-        wb.last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(seconds=MIN_WAIT_BEFORE_PV_ON + 1)
+    wallbox = setup_wallboxes_off_state
 
-    # have charge request active for all WBs
-    wallbox[0].charge_state = WBDef.CHARGE_REQUEST1
-    wallbox[1].charge_state = WBDef.CHARGE_REQUEST1
     print('')
     activate_grid_charge(connection, wallbox)
 
