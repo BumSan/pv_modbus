@@ -81,6 +81,18 @@ def activate_grid_charge(wallbox_connection, wallbox: List[WBSystemState]):
         print('No Connector connected')
 
 
+def deactivate_pv_charge_for_wallbox(wallbox: WBSystemState):
+    wallbox.pv_charge_active = False
+    wallbox.max_current_active = 0
+    wallbox.last_charge_deactivation = datetime.datetime.now()
+
+
+def activate_pv_charge_for_wallbox(wallbox: WBSystemState, current):
+    wallbox.pv_charge_active = True
+    wallbox.max_current_active = current
+    wallbox.last_charge_activation = datetime.datetime.now()
+
+
 def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], available_current):
 
     used_current = 0.0
@@ -107,8 +119,7 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                     if is_pv_charge_deactivation_allowed(wb):
                         used_current = 0
                         wallbox_connection.set_max_current(wb.slave_id, used_current)
-                        wb.pv_charge_active = False
-                        wb.max_current_active = used_current
+                        deactivate_pv_charge_for_wallbox(wb)
                         print('Charge deactivation for Wallbox ID' + str(wb.slave_id))
                     else:  # not allowed, so reduce it to min value for now and try again later
                         used_current = WB_MIN_CURRENT
@@ -118,8 +129,7 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
             else:  # no charge request (anymore)
                 used_current = 0
                 wallbox_connection.set_max_current(wb.slave_id, used_current)
-                wb.pv_charge_active = False
-                wb.max_current_active = used_current
+                deactivate_pv_charge_for_wallbox(wb)
                 print('No charge request anymore for Wallbox ID' + str(wb.slave_id) + '. Deactivating')
 
             # keep track of the the current contingent
@@ -143,8 +153,7 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                     if is_pv_charge_activation_allowed(wb):
                         wallbox_connection.set_max_current(wb.slave_id, used_current)
                         print('Setting Wallbox ID' + str(wb.slave_id) + ' to ' + str(used_current) + ' A')
-                        wb.pv_charge_active = True
-                        wb.max_current_active = used_current
+                        activate_pv_charge_for_wallbox(wb, used_current)
                         # keep track of the the current contingent
                         available_current -= used_current
                         print('Still Available current: ' + str(available_current) + ' A')
