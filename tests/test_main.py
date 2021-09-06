@@ -164,6 +164,7 @@ def test_activate_pv_charge_with_different_currents_without_plug(setup_wallboxes
     assert wallbox[1].max_current_active == wb2_current
 
 
+@pytest.mark.activate
 def test_activate_pv_charge_check_time_dependencies(setup_wallboxes_off_state):
 
     connection = create_fake_wallbox_connection()
@@ -253,6 +254,7 @@ def test_activate_pv_charge_check_time_dependencies(setup_wallboxes_off_state):
     assert wallbox[1].max_current_active == WB_MIN_CURRENT
 
 
+@pytest.mark.activate
 def test_activate_grid_charge(setup_wallboxes_off_state):
 
     connection = create_fake_wallbox_connection()
