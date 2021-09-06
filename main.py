@@ -18,8 +18,8 @@ SOLARLOG_IP = '192.168.178.103'
 SOLARLOG_PORT = 502
 SOLARLOG_SLAVEID = 0x01
 
-WB1_SLAVEID = 1
-WB2_SLAVEID = 2
+WB1_SLAVEID = 1  # Slave ID is also Priority (e.g. for new(!) PV Charge requests)
+WB2_SLAVEID = 2  # smaller numbers mean higher priority
 WB_SYSTEM_MAX_CURRENT = 16.0  # Ampere
 WB_MIN_CURRENT = 6.0  # Ampere
 
@@ -209,6 +209,7 @@ def watt_to_amp_rounded(val_watt: int) -> float:
 
 def main():
     wallbox = [WBSystemState(WB1_SLAVEID), WBSystemState(WB2_SLAVEID)]
+    wallbox.sort(key=lambda x: x.slave_id)  # make the Slave ID also the priority of the WB
 
     # SolarLog
     config_solar_log = pv_modbus_solarlog.ModbusTCPConfig(SOLARLOG_IP, SOLARLOG_PORT, slave_id=SOLARLOG_SLAVEID)
