@@ -3,6 +3,8 @@ from pv_register_config import ModbusRegisters
 from pv_register_config import HeidelbergWBReadInputs
 from pv_register_config import HeidelbergWBReadHolding, HeidelbergWBWriteHolding
 
+import logging
+
 
 class WBDef:
     ENABLE_STANDBY = 0
@@ -46,28 +48,28 @@ class ModbusRTUHeidelbergWB:
 
     def connect_wb_heidelberg(self):
         if not self.wb_handle.connect():
-            print('No Connection possible to WB Heidelberg')
+            logging.fatal('No Connection possible to WB Heidelberg')
 
     # do all the Read Input Registers
     def _call_remote_input_registers(self, slave_id: int, register_set: ModbusRegisters):
         read = self.wb_handle.read_input_registers(register_set.register
                                                    , register_set.length
                                                    , unit=slave_id)
-        print(read.registers)
+        logging.info('%s', read.registers)
         return read.registers
 
     def get_charging_state(self, slave_id: int):
         if not WBDef.FAKE_WB_CONNECTION:
             return self._call_remote_input_registers(slave_id, self.wb_read_input.chargingState)
         else:
-            print('Testmode active')
+            logging.warning('Testmode active')
             return WBDef.CHARGE_REQUEST1
 
     def get_actual_charge_power(self, slave_id: int):  # returns in Watt
         if not WBDef.FAKE_WB_CONNECTION:
             return self._call_remote_input_registers(slave_id, self.wb_read_input.actualChargePower)
         else:
-            print('Testmode active')
+            logging.warning('Testmode active')
             return 100
 
     def get_pcb_temperature(self, slave_id: int):
@@ -78,7 +80,7 @@ class ModbusRTUHeidelbergWB:
         read = self.wb_handle.read_holding_registers(register_set.register
                                                      , register_set.length
                                                      , unit=slave_id)
-        print(read.registers)
+        logging.info('%s', read.registers)
         return read.registers
 
     def get_max_current(self, slave_id: int):
@@ -94,10 +96,10 @@ class ModbusRTUHeidelbergWB:
                                                       , values=val
                                                       , unit=slave_id)
             if response.isError():
-                print('Could not write Register' + str(register_set.register))
+                logging.fatal('Could not write Register %s', register_set.register)
             return response
         else:
-            print('Testmode active')
+            logging.warning('Testmode active')
             return
 
     def set_standby_control(self, slave_id: int, val):

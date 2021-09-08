@@ -1,6 +1,8 @@
 from pymodbus.client.sync import ModbusTcpClient
 from pv_register_config import SolarLogReadInputs
 
+import logging
+
 
 class ModbusTCPConfig:
     def __init__(self, ip: str, port: int, slave_id):
@@ -17,7 +19,7 @@ class ModbusTCPSolarLog:
 
     def connect_solar_log(self):
         if not self.solar_log_handle.connect():
-            print('No Connection possible to Solar Log')
+            logging.fatal('No Connection possible to Solar Log')
 
     def get_actual_output_sync_ac(self):
         # connect to SolarLog

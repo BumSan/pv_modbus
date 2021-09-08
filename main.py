@@ -10,7 +10,7 @@ import datetime
 import pymodbus.exceptions
 
 # log level
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 
 
@@ -152,13 +152,13 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                     # check if we can activate this WB. If not we just try the next one
                     if is_pv_charge_activation_allowed(wb):
                         wallbox_connection.set_max_current(wb.slave_id, used_current)
-                        print('Setting Wallbox ID' + str(wb.slave_id) + ' to ' + str(used_current) + ' A')
+                        logging.info('Setting Wallbox ID %s to %s A', wb.slave_id, used_current)
                         activate_pv_charge_for_wallbox(wb, used_current)
                         # keep track of the the current contingent
                         available_current -= used_current
-                        print('Still Available current: ' + str(available_current) + ' A')
+                        logging.debug('Still Available current: %s A', available_current)
                     else:
-                        print('Charge activation for Wallbox ID' + str(wb.slave_id) + ' not allowed due to time constraints')
+                        logging.error('Charge activation for Wallbox ID %s not allowed due to time constraints', wb.slave_id)
             else:  # not enough power left
                 logging.debug('Not enough power for charging any further Wallboxes')
                 break
