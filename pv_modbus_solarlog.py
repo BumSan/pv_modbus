@@ -37,3 +37,16 @@ class ModbusTCPSolarLog:
         val = (read.registers[1] << 16) + read.registers[0]
         return val  # in Watt
 
+
+class SolarLogData:
+    actual_output = 0
+    actual_consumption = 0
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        if not isinstance(other, SolarLogData):
+            return NotImplemented
+
+        return self.actual_output == other.actual_output and self.actual_consumption == other.actual_consumption

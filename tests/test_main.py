@@ -45,7 +45,7 @@ def reset_wallboxes(wallboxes: List[WBSystemState]):
 @pytest.fixture
 def setup_wallboxes_off_state(mocker):
     mocker.patch(
-        'pv_modbus.main.pv_modbus_wallbox.ModbusRTUHeidelbergWB.set_max_current',
+        'pv_modbus.main.ModbusRTUHeidelbergWB.set_max_current',
         return_value=True
     )
 
@@ -62,7 +62,7 @@ def setup_wallboxes_off_state(mocker):
 @pytest.fixture
 def setup_wallboxes_pv_on(mocker):
     mocker.patch(
-        'pv_modbus.main.pv_modbus_wallbox.ModbusRTUHeidelbergWB.set_max_current',
+        'pv_modbus.main.ModbusRTUHeidelbergWB.set_max_current',
         return_value=True
     )
 

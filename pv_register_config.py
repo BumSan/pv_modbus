@@ -7,7 +7,7 @@ class ModbusRegisters:
 
 
 class HeidelbergWBReadInputs:
-    chargingState = ModbusRegisters(5, 1)  # uint16: A1, 3=A2, 4=B1, 5=B2, 6=C1, 7=C2, 8=derating, 9=E, 10=F, 11=ERR
+    chargingState = ModbusRegisters(5, 1)  # uint16: 2=A1, 3=A2, 4=B1, 5=B2, 6=C1, 7=C2, 8=derating, 9=E, 10=F, 11=ERR
     # A No vehicle plugged
     # B Vehicle plugged without charging request
     # C Vehicle plugged with charging request

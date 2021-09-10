@@ -1,18 +1,18 @@
 from typing import List
-#from switch_position import PV_Switch
-import pv_modbus_solarlog
-import pv_modbus_wallbox
+# from switch_position import PV_Switch
+from pv_modbus_solarlog import ModbusTCPSolarLog, ModbusTCPConfig, ModbusTcpClient, SolarLogReadInputs, SolarLogData
+from pv_modbus_wallbox import ModbusRegisters, ModbusRTUConfig, ModbusRTUHeidelbergWB, ModbusSerialClient
+from pv_modbus_wallbox import HeidelbergWBReadInputs, HeidelbergWBReadHolding, HeidelbergWBWriteHolding
 from pv_modbus_wallbox import WBDef
 from wallbox_system_state import WBSystemState
+from pv_database import PVDatabase
 import logging
 import time
 import datetime
 import pymodbus.exceptions
 
 # log level
-logging.basicConfig(level=logging.WARNING)
-
-
+logging.basicConfig(level=logging.DEBUG)
 
 SOLARLOG_IP = '192.168.178.103'
 SOLARLOG_PORT = 502
@@ -33,6 +33,7 @@ MIN_WAIT_BEFORE_PV_ON = 1 * 60  # secs. We want to wait at least for x secs befo
 # this is "Min time off"
 
 GPIO_SWITCH = 24
+
 
 # Must have Features
 # minimale Ladedauer (zB 5min)
@@ -94,7 +95,6 @@ def activate_pv_charge_for_wallbox(wallbox: WBSystemState, current):
 
 
 def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], available_current):
-
     used_current = 0.0
 
     # are any of the Wallboxes already charging with PV? then we update these first
@@ -125,7 +125,8 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                         used_current = WB_MIN_CURRENT
                         wallbox_connection.set_max_current(wb.slave_id, used_current)
                         wb.max_current_active = used_current
-                        logging.error('Charge deactivation for Wallbox ID %s not allowed due to time constraints', wb.slave_id)
+                        logging.error('Charge deactivation for Wallbox ID %s not allowed due to time constraints',
+                                      wb.slave_id)
             else:  # no charge request (anymore)
                 used_current = 0
                 wallbox_connection.set_max_current(wb.slave_id, used_current)
@@ -158,7 +159,8 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                         available_current -= used_current
                         logging.debug('Still Available current: %s A', available_current)
                     else:
-                        logging.error('Charge activation for Wallbox ID %s not allowed due to time constraints', wb.slave_id)
+                        logging.error('Charge activation for Wallbox ID %s not allowed due to time constraints',
+                                      wb.slave_id)
             else:  # not enough power left
                 logging.debug('Not enough power for charging any further Wallboxes')
                 break
@@ -194,13 +196,8 @@ def deactivate_pv_charge(wallbox_connection, wallbox: List[WBSystemState]):
             wb.last_charge_deactivation = datetime.datetime.now()
 
 
-def watt_to_amp(val_watt: int) -> float:
-    val_amp = val_watt / (230*3)  # 3 Phases, 230V
-    return val_amp
-
-
 def watt_to_amp_rounded(val_watt: int) -> float:
-    val_amp = val_watt / (230*3)  # 3 Phases, 230V
+    val_amp = val_watt / (230 * 3)  # 3 Phases, 230V
     val_amp *= 10
     val_amp = int(val_amp)
     val_amp /= 10
@@ -212,21 +209,21 @@ def main():
     wallbox.sort(key=lambda x: x.slave_id)  # make the Slave ID also the priority of the WB
 
     # SolarLog
-    config_solar_log = pv_modbus_solarlog.ModbusTCPConfig(SOLARLOG_IP, SOLARLOG_PORT, slave_id=SOLARLOG_SLAVEID)
-    solarlog_connection = pv_modbus_solarlog.ModbusTCPSolarLog(config_solar_log, pv_modbus_solarlog.SolarLogReadInputs())
+    config_solar_log = ModbusTCPConfig(SOLARLOG_IP, SOLARLOG_PORT, slave_id=SOLARLOG_SLAVEID)
+    solarlog_connection = ModbusTCPSolarLog(config_solar_log, SolarLogReadInputs())
 
     # RTU
-    config_wb_heidelberg = pv_modbus_wallbox.ModbusRTUConfig('rtu', '/dev/serial0', timeout=3, baudrate=19200, bytesize=8,
-                                                             parity='E',
-                                                             stopbits=1)
-    wallbox_connection = pv_modbus_wallbox.ModbusRTUHeidelbergWB(wb_config=config_wb_heidelberg
-                                                                 , wb_read_input=pv_modbus_wallbox.HeidelbergWBReadInputs()
-                                                                 , wb_read_holding=pv_modbus_wallbox.HeidelbergWBReadHolding()
-                                                                 , wb_write_holding=pv_modbus_wallbox.HeidelbergWBWriteHolding())
+    config_wb_heidelberg = ModbusRTUConfig('rtu', '/dev/serial0', timeout=3, baudrate=19200, bytesize=8,
+                                           parity='E',
+                                           stopbits=1)
+    wallbox_connection = ModbusRTUHeidelbergWB(wb_config=config_wb_heidelberg
+                                               , wb_read_input=HeidelbergWBReadInputs()
+                                               , wb_read_holding=HeidelbergWBReadHolding()
+                                               , wb_write_holding=HeidelbergWBWriteHolding())
     wallbox_connection.connect_wb_heidelberg()
 
     # set up switch
-    #pv_switch = PV_Switch(GPIO_SWITCH)
+    # pv_switch = PV_Switch(GPIO_SWITCH)
 
     # basically
     # check if any car is attached to WB
@@ -243,6 +240,9 @@ def main():
     for wb in wallbox:
         wb.last_charge_activation = datetime.datetime.now()
         wb.last_charge_deactivation = datetime.datetime.now()
+
+    solar_log_data = SolarLogData()
+    database = PVDatabase()
 
     # cowboy lucky loop
     while True:
@@ -294,20 +294,21 @@ def main():
                 deactivate_grid_charge(wallbox_connection, wallbox)
 
                 # Get the PV data (all in Watt)
-                pv_actual_output = solarlog_connection.get_actual_output_sync_ac()
-                logging.warning('Actual AC Output (PV): %s W', pv_actual_output)
-                actual_consumption = solarlog_connection.get_actual_consumption_sync_ac()
-                logging.warning('Actual AC consumption: %s W', actual_consumption)
+                solar_log_data.actual_output = solarlog_connection.get_actual_output_sync_ac()
+                logging.warning('Actual AC Output (PV): %s W', solar_log_data.actual_output)
+                solar_log_data.actual_consumption = solarlog_connection.get_actual_consumption_sync_ac()
+                logging.warning('Actual AC consumption: %s W', solar_log_data.actual_consumption)
 
                 # for testing only
                 if WBDef.FAKE_WB_CONNECTION:
-                    pv_actual_output = 6000
+                    solar_log_data.actual_output = 6000
 
                 # check at Wallboxes how much we currently use for charging
                 already_used_charging_power_for_car = 0
                 for wb in wallbox:
                     if is_plug_connected_and_charge_ready(wb):
                         val = wallbox_connection.get_actual_charge_power(wb.slave_id)
+                        wb.actual_current_active = watt_to_amp_rounded(val)
                         already_used_charging_power_for_car += val
                 logging.warning('Currently used power for charging: %s W', already_used_charging_power_for_car)
 
@@ -316,20 +317,20 @@ def main():
                 # 6000 - 4500 + 4000 -> 5500 Watt we can use for charging the car
 
                 # calc house consumption
-                house_consumption = actual_consumption - already_used_charging_power_for_car
+                house_consumption = solar_log_data.actual_consumption - already_used_charging_power_for_car
                 if house_consumption < 0:  # could happen as measurement is from different devices and times
                     house_consumption = 0
 
                 # calc how much we could assign to the cars
-                available_power = pv_actual_output - house_consumption
+                available_power = solar_log_data.actual_output - house_consumption
 
                 # sanity check, can´t be more than PV output
-                if available_power > pv_actual_output:
-                    available_power = pv_actual_output
+                if available_power > solar_log_data.actual_output:
+                    available_power = solar_log_data.actual_output
                 logging.warning('Available power for PV charge: %s W', available_power)
 
                 # check for enough power to use PV
-                if watt_to_amp(available_power) >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
+                if watt_to_amp_rounded(available_power) >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
                     # Charge galore
                     activate_pv_charge(wallbox_connection, wallbox, watt_to_amp_rounded(available_power))
 
@@ -337,7 +338,14 @@ def main():
             logging.debug('Calculation cycle ends')
             logging.debug('')
         except:
-            logging.error('Unknown error occured with communication to WB. Trying again after some seconds.')
+            logging.fatal('Unknown error occured with communication to WB. Trying again after some seconds.')
+
+        # write PV into DB
+        database.write_solarlog_data_only_if_changed(solar_log_data)
+
+        # write wallbox into DB
+        database.write_wallbox_data_only_if_changed(wallbox)
+
         time.sleep(5)
     # end loop
 
