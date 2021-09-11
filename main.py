@@ -32,6 +32,8 @@ MIN_TIME_PV_CHARGE = 1 * 60  # secs. We want to charge at least for x secs befor
 MIN_WAIT_BEFORE_PV_ON = 1 * 60  # secs. We want to wait at least for x secs before switch off->on (PV charge related)
 # this is "Min time off"
 
+SOLARLOG_WRITE_EVERY = 12  # *5s
+
 GPIO_SWITCH = 24
 
 
@@ -196,6 +198,10 @@ def deactivate_pv_charge(wallbox_connection, wallbox: List[WBSystemState]):
             wb.last_charge_deactivation = datetime.datetime.now()
 
 
+def watt_to_amp(val_watt: int) -> float:
+    return val_watt / (230 * 3)  # 3 Phases, 230V
+
+
 def watt_to_amp_rounded(val_watt: int) -> float:
     val_amp = val_watt / (230 * 3)  # 3 Phases, 230V
     val_amp *= 10
@@ -242,6 +248,7 @@ def main():
         wb.last_charge_deactivation = datetime.datetime.now()
 
     solar_log_data = SolarLogData()
+    solar_log_data_write_enable = 0
     database = PVDatabase()
 
     # cowboy lucky loop
@@ -266,6 +273,22 @@ def main():
             for wb in wallbox:
                 wb.charge_state = wallbox_connection.get_charging_state(wb.slave_id)
                 set_standby_if_required(wallbox_connection, wb)
+
+            # get data for logger
+            # Get the PV data (all in Watt)
+            solar_log_data.actual_output = solarlog_connection.get_actual_output_sync_ac()
+            logging.warning('Actual AC Output (PV): %s W', solar_log_data.actual_output)
+            solar_log_data.actual_consumption = solarlog_connection.get_actual_consumption_sync_ac()
+            logging.warning('Actual AC consumption: %s W', solar_log_data.actual_consumption)
+
+            # check at Wallboxes how much we currently use for charging
+            already_used_charging_power_for_car = 0
+            for wb in wallbox:
+                if is_plug_connected_and_charge_ready(wb):
+                    val = wallbox_connection.get_actual_charge_power(wb.slave_id)
+                    wb.actual_current_active = watt_to_amp(val)
+                    already_used_charging_power_for_car += val
+            logging.warning('Currently used power for charging: %s W', already_used_charging_power_for_car)
 
             # ===================
             # check Switch Position: Charge all or only PV
@@ -293,24 +316,9 @@ def main():
                 # this could be more intelligent, just brute force make sure that we have a clean state to start from
                 deactivate_grid_charge(wallbox_connection, wallbox)
 
-                # Get the PV data (all in Watt)
-                solar_log_data.actual_output = solarlog_connection.get_actual_output_sync_ac()
-                logging.warning('Actual AC Output (PV): %s W', solar_log_data.actual_output)
-                solar_log_data.actual_consumption = solarlog_connection.get_actual_consumption_sync_ac()
-                logging.warning('Actual AC consumption: %s W', solar_log_data.actual_consumption)
-
                 # for testing only
-                if WBDef.FAKE_WB_CONNECTION:
-                    solar_log_data.actual_output = 6000
-
-                # check at Wallboxes how much we currently use for charging
-                already_used_charging_power_for_car = 0
-                for wb in wallbox:
-                    if is_plug_connected_and_charge_ready(wb):
-                        val = wallbox_connection.get_actual_charge_power(wb.slave_id)
-                        wb.actual_current_active = watt_to_amp_rounded(val)
-                        already_used_charging_power_for_car += val
-                logging.warning('Currently used power for charging: %s W', already_used_charging_power_for_car)
+                #if WBDef.FAKE_WB_CONNECTION:
+                #    solar_log_data.actual_output = 6000
 
                 # calculate how much power we have to set
                 # e.g. PV produces 6000 Watt, House consumes 4500 Watt (incl. Car charging!), Car charges with 4000 Watt
@@ -341,7 +349,11 @@ def main():
             logging.fatal('Unknown error occured with communication to WB. Trying again after some seconds.')
 
         # write PV into DB
-        database.write_solarlog_data_only_if_changed(solar_log_data)
+        if not solar_log_data_write_enable % SOLARLOG_WRITE_EVERY:
+            database.write_solarlog_data_only_if_changed(solar_log_data)
+            solar_log_data_write_enable = 0
+
+        solar_log_data_write_enable += 1
 
         # write wallbox into DB
         database.write_wallbox_data_only_if_changed(wallbox)
