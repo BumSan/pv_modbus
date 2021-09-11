@@ -27,18 +27,23 @@ class PVDatabase:
     def write_solarlog_data(self, solar_log_data: SolarLogData):
         self.solarlog_data = copy.deepcopy(solar_log_data)
         self.solarlog_lastwrite = datetime.datetime.now()
-        # Influx
-        influx = InfluxDBClient(host=INFLUX_HOST
-                                , port=INFLUX_PORT
-                                , username=INFLUX_USER
-                                , password=INFLUX_PWD)
 
-        line_solar = 'solarlog,sensor=solarlog1 pv_output=' + str(solar_log_data.actual_output) \
-                     + ',consumption=' + str(solar_log_data.actual_consumption)
-        if not influx.write([line_solar], params={'epoch': 's', 'db': 'pv_modbus'}, expected_response_code=204, protocol='line'):
-            logging.error('SolarLog Data write failed')
+        try:
+            # Influx
+            influx = InfluxDBClient(host=INFLUX_HOST
+                                    , port=INFLUX_PORT
+                                    , username=INFLUX_USER
+                                    , password=INFLUX_PWD)
 
-        influx.close()
+            line_solar = 'solarlog,sensor=solarlog1 pv_output=' + str(solar_log_data.actual_output) \
+                         + ',consumption=' + str(solar_log_data.actual_consumption)
+
+            if not influx.write([line_solar], params={'epoch': 's', 'db': 'pv_modbus'}, expected_response_code=204, protocol='line'):
+                logging.error('SolarLog Data write failed')
+
+            influx.close()
+        except:
+            logging.fatal('DB Connection is gone')
 
     def write_solarlog_data_only_if_changed(self, solar_log_data: SolarLogData):
         time_diff = datetime.datetime.now() - self.solarlog_lastwrite
@@ -57,23 +62,26 @@ class PVDatabase:
         self.wallbox_data = copy.deepcopy(wallboxes)
         self.wallbox_lastwrite = datetime.datetime.now()
 
-        # Influx
-        influx = InfluxDBClient(host=INFLUX_HOST
-                                , port=INFLUX_PORT
-                                , username=INFLUX_USER
-                                , password=INFLUX_PWD)
-        for wb in wallboxes:
-            line_wallbox = 'wallbox,sensor=wallbox' + str(wb.slave_id)\
-                           + ' charge_state=' + str(wb.charge_state) \
-                           + ',pv_charge_active=' + str(wb.pv_charge_active) \
-                           + ',grid_charge_active=' + str(wb.grid_charge_active) \
-                           + ',max_current_active=' + str(wb.max_current_active) \
-                           + ',actual_current_active=' + str(wb.actual_current_active)
+        try:
+            # Influx
+            influx = InfluxDBClient(host=INFLUX_HOST
+                                    , port=INFLUX_PORT
+                                    , username=INFLUX_USER
+                                    , password=INFLUX_PWD)
+            for wb in wallboxes:
+                line_wallbox = 'wallbox,sensor=wallbox' + str(wb.slave_id)\
+                               + ' charge_state=' + str(wb.charge_state) \
+                               + ',pv_charge_active=' + str(wb.pv_charge_active) \
+                               + ',grid_charge_active=' + str(wb.grid_charge_active) \
+                               + ',max_current_active=' + str(wb.max_current_active) \
+                               + ',actual_current_active=' + str(wb.actual_current_active)
 
-            if not influx.write([line_wallbox], params={'epoch': 's', 'db': 'pv_modbus'}, expected_response_code=204, protocol='line'):
-                logging.error('Wallbox Data write failed')
+                if not influx.write([line_wallbox], params={'epoch': 's', 'db': 'pv_modbus'}, expected_response_code=204, protocol='line'):
+                    logging.error('Wallbox Data write failed')
 
-        influx.close()
+            influx.close()
+        except:
+            logging.fatal('DB Connection is gone')
 
     def write_wallbox_data_only_if_changed(self, wallboxes: List[WBSystemState]):
         time_diff = datetime.datetime.now() - self.wallbox_lastwrite
