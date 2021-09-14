@@ -1,5 +1,5 @@
 from typing import List
-# from switch_position import PV_Switch
+from switch_position import PV_Switch
 from pv_modbus_solarlog import ModbusTCPSolarLog, ModbusTCPConfig, ModbusTcpClient, SolarLogReadInputs, SolarLogData
 from pv_modbus_wallbox import ModbusRegisters, ModbusRTUConfig, ModbusRTUHeidelbergWB, ModbusSerialClient
 from pv_modbus_wallbox import HeidelbergWBReadInputs, HeidelbergWBReadHolding, HeidelbergWBWriteHolding
@@ -229,7 +229,7 @@ def main():
     wallbox_connection.connect_wb_heidelberg()
 
     # set up switch
-    # pv_switch = PV_Switch(GPIO_SWITCH)
+    pv_switch = PV_Switch(GPIO_SWITCH)
 
     # basically
     # check if any car is attached to WB
@@ -258,7 +258,7 @@ def main():
             # if we lose communication to the WB, assume we lose it to all; and split max current of 16A evenly
             for wb in wallbox:
                 wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
-        except pymodbus.exceptions.ConnectionException:
+        except:
             logging.error('Connection error. Could not connect to WB. Trying again.')
             time.sleep(5)
             continue
@@ -293,7 +293,8 @@ def main():
             # ===================
             # check Switch Position: Charge all or only PV
             # ===================
-            pv_charge_only = True  # pv_switch.is_switch_set_to_pv_only()
+            #pv_charge_only = True
+            pv_charge_only = pv_switch.is_switch_set_to_pv_only()
 
             # For later: Would be cool to have it defined per Wallbox. e.g. one car can always charge fully,
             # the other one only when sun shines
