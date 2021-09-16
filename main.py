@@ -10,18 +10,17 @@ import time
 import datetime
 import configparser
 
-HAVE_SWITCH = False
-if HAVE_SWITCH:
-    from switch_position import PV_Switch
-
 import pymodbus.exceptions
 
 # log level
 logging.basicConfig(level=logging.DEBUG)
 
-
 config = configparser.ConfigParser()
 config.read('pv_modbus_config.ini')
+
+HAVE_SWITCH = config['SWITCH'].getboolean('HAVE_SWITCH')
+if HAVE_SWITCH:
+    from switch_position import PV_Switch
 
 SOLARLOG_IP = config['SOLARLOG']['SOLARLOG_IP']
 SOLARLOG_PORT = int(config['SOLARLOG']['SOLARLOG_PORT'])
