@@ -9,38 +9,41 @@ from pv_database import PVDatabase
 import logging
 import time
 import datetime
+import configparser
 import pymodbus.exceptions
 
 # log level
 logging.basicConfig(level=logging.DEBUG)
 
-SOLARLOG_IP = '192.168.178.103'
-SOLARLOG_PORT = 502
-SOLARLOG_SLAVEID = 0x01
 
-WB1_SLAVEID = 1  # Slave ID is also Priority (e.g. for new(!) PV Charge requests)
-WB2_SLAVEID = 2  # smaller numbers mean higher priority
-WB_SYSTEM_MAX_CURRENT = 16.0  # Ampere
-WB_MIN_CURRENT = 6.0  # Ampere
+config = configparser.ConfigParser()
+config.read('pv_modbus_config.ini')
 
-PV_CHARGE_AMP_TOLERANCE = 2  # Amp -> if we do not have enough PV power to reach the WB min, use this threshold value
+SOLARLOG_IP = config['SOLARLOG']['SOLARLOG_IP']
+SOLARLOG_PORT = int(config['SOLARLOG']['SOLARLOG_PORT'])
+SOLARLOG_SLAVEID = int(config['SOLARLOG']['SOLARLOG_SLAVEID'])
+
+WB1_SLAVEID = int(config['WALLBOX']['WB1_SLAVEID'])  # Slave ID is also Priority (e.g. for new(!) PV Charge requests)
+WB2_SLAVEID = int(config['WALLBOX']['WB1_SLAVEID'])  # smaller numbers mean higher priority
+WB_RTU_DEVICE = config['WALLBOX']['WB_RTU_DEVICE']
+
+WB_SYSTEM_MAX_CURRENT = float(config['WALLBOX']['WB_SYSTEM_MAX_CURRENT'])  # Ampere
+WB_MIN_CURRENT = float(config['WALLBOX']['WB_MIN_CURRENT'])  # Ampere
+# Amp -> if we do not have enough PV power to reach the WB min, use this threshold value
+PV_CHARGE_AMP_TOLERANCE = float(config['WALLBOX']['PV_CHARGE_AMP_TOLERANCE'])
 # and take up to x Amp from grid
 
 # time constraints
-MIN_TIME_PV_CHARGE = 1 * 60  # secs. We want to charge at least for x secs before switch on->off (PV charge related)
+# secs. We want to charge at least for x secs before switch on->off (PV charge related)
+MIN_TIME_PV_CHARGE = int(config['TIME']['MIN_TIME_PV_CHARGE'])
 # this is "Min time on"
-MIN_WAIT_BEFORE_PV_ON = 1 * 60  # secs. We want to wait at least for x secs before switch off->on (PV charge related)
+# secs. We want to wait at least for x secs before switch off->on (PV charge related)
+MIN_WAIT_BEFORE_PV_ON = int(config['TIME']['MIN_TIME_PV_CHARGE'])
 # this is "Min time off"
 
-SOLARLOG_WRITE_EVERY = 12  # *5s
+SOLARLOG_WRITE_EVERY = int(config['LOGGING']['SOLARLOG_WRITE_EVERY'])  # *5s
 
-GPIO_SWITCH = 24
-
-
-# Must have Features
-# minimale Ladedauer (zB 5min)
-#  min Dauer zwischen Ladevorgängen
-# Umschalten PV/Sofort-Laden??
+GPIO_SWITCH = int(config['SWITCH']['GPIO_SWITCH'])
 
 
 # check if we have to activate standby
@@ -219,7 +222,7 @@ def main():
     solarlog_connection = ModbusTCPSolarLog(config_solar_log, SolarLogReadInputs())
 
     # RTU
-    config_wb_heidelberg = ModbusRTUConfig('rtu', '/dev/serial0', timeout=3, baudrate=19200, bytesize=8,
+    config_wb_heidelberg = ModbusRTUConfig('rtu', WB_RTU_DEVICE, timeout=3, baudrate=19200, bytesize=8,
                                            parity='E',
                                            stopbits=1)
     wallbox_connection = ModbusRTUHeidelbergWB(wb_config=config_wb_heidelberg

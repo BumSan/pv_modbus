@@ -5,14 +5,22 @@ from influxdb import InfluxDBClient
 from pv_modbus_solarlog import SolarLogData
 from wallbox_system_state import WBSystemState
 import logging
+import configparser
 
-INFLUX_HOST = '192.168.178.106'
-INFLUX_PORT = 8086
-INFLUX_USER = 'pv_modbus'
-INFLUX_PWD = '#'
 
-WALLBOX_MIN_WRITE_CYCLE = 10*60  # every 10 minutes, at least (earlier if data has changed)
-SOLARLOG_MIN_WRITE_CYCLE = 10*60  # every 10 minutes, at least (earlier if data has changed)
+config = configparser.ConfigParser()
+config.read('pv_modbus_config.ini')
+
+INFLUX_HOST = config['LOGGING']['INFLUX_HOST']
+INFLUX_PORT = int(config['LOGGING']['INFLUX_PORT'])
+INFLUX_USER = config['LOGGING']['INFLUX_USER']
+INFLUX_PWD = config['LOGGING']['INFLUX_PWD']
+INFLUX_DB_NAME = config['LOGGING']['INFLUX_DB_NAME']
+
+# every x seconds, at least (earlier if data has changed)
+WALLBOX_MIN_WRITE_CYCLE = float(config['LOGGING']['WALLBOX_MIN_WRITE_CYCLE'])
+# every x seconds, at least (earlier if data has changed)
+SOLARLOG_MIN_WRITE_CYCLE = float(config['LOGGING']['SOLARLOG_MIN_WRITE_CYCLE'])
 
 class PVDatabase:
     solarlog_data: SolarLogData = None
@@ -38,7 +46,7 @@ class PVDatabase:
             line_solar = 'solarlog,sensor=solarlog1 pv_output=' + str(solar_log_data.actual_output) \
                          + ',consumption=' + str(solar_log_data.actual_consumption)
 
-            if not influx.write([line_solar], params={'epoch': 's', 'db': 'pv_modbus'}, expected_response_code=204, protocol='line'):
+            if not influx.write([line_solar], params={'epoch': 's', 'db': INFLUX_DB_NAME}, expected_response_code=204, protocol='line'):
                 logging.error('SolarLog Data write failed')
 
             influx.close()
@@ -76,7 +84,7 @@ class PVDatabase:
                                + ',max_current_active=' + str(wb.max_current_active) \
                                + ',actual_current_active=' + str(wb.actual_current_active)
 
-                if not influx.write([line_wallbox], params={'epoch': 's', 'db': 'pv_modbus'}, expected_response_code=204, protocol='line'):
+                if not influx.write([line_wallbox], params={'epoch': 's', 'db': INFLUX_DB_NAME}, expected_response_code=204, protocol='line'):
                     logging.error('Wallbox Data write failed')
 
             influx.close()
