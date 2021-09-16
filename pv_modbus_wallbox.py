@@ -52,6 +52,10 @@ class ModbusRTUHeidelbergWB:
         if not self.wb_handle.connect():
             logging.fatal('No Connection possible to WB Heidelberg')
 
+    def close_wb_heidelberg(self):
+        if not self.wb_handle.close():
+            logging.fatal('Closing connection to WB Heidelberg')
+
     # do all the Read Input Registers
     def _call_remote_input_registers(self, slave_id: int, register_set: ModbusRegisters):
         read = self.wb_handle.read_input_registers(register_set.register
