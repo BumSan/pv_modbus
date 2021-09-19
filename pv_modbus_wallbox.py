@@ -5,6 +5,18 @@ from pv_register_config import HeidelbergWBReadHolding, HeidelbergWBWriteHolding
 
 import logging
 
+# Get handles to the various pymodbus logs
+server_log          = logging.getLogger("pysnmp.server")
+client_log          = logging.getLogger("pysnmp.client")
+protocol_log        = logging.getLogger("pysnmp.protocol")
+store_log           = logging.getLogger("pysnmp.store")
+
+# Enable logging levels
+server_log.setLevel(logging.DEBUG)
+protocol_log.setLevel(logging.DEBUG)
+client_log.setLevel(logging.DEBUG)
+store_log.setLevel(logging.DEBUG)
+
 
 class WBDef:
     ENABLE_STANDBY = 0
