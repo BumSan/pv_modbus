@@ -269,17 +269,16 @@ def main():
 
         try:
             # if we lose communication to the WB, assume we lose it to all; and split max current of 16A evenly
-            wallbox_connection.connect_wb_heidelberg()
-
-            for wb in wallbox:
-                wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
+            if wallbox_connection.connect_wb_heidelberg():
+                for wb in wallbox:
+                    wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
+            else:
+                logging.fatal('connect_wb_heidelberg failed')
         except Exception as e:
             logging.fatal(str(e))
             logging.fatal('Connection error. Could not connect to WB. Trying again.')
             time.sleep(5)
             continue
-        finally:
-            wallbox_connection.close_wb_heidelberg()
 
         logging.info(' ')
         logging.info('Next Calculation cycle starts')
