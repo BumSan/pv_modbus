@@ -27,7 +27,7 @@ SOLARLOG_PORT = int(config['SOLARLOG']['SOLARLOG_PORT'])
 SOLARLOG_SLAVEID = int(config['SOLARLOG']['SOLARLOG_SLAVEID'])
 
 WB1_SLAVEID = int(config['WALLBOX']['WB1_SLAVEID'])  # Slave ID is also Priority (e.g. for new(!) PV Charge requests)
-WB2_SLAVEID = int(config['WALLBOX']['WB1_SLAVEID'])  # smaller numbers mean higher priority
+WB2_SLAVEID = int(config['WALLBOX']['WB2_SLAVEID'])  # smaller numbers mean higher priority
 WB_RTU_DEVICE = config['WALLBOX']['WB_RTU_DEVICE']
 
 WB_SYSTEM_MAX_CURRENT = float(config['WALLBOX']['WB_SYSTEM_MAX_CURRENT'])  # Ampere
