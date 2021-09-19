@@ -13,7 +13,7 @@ import configparser
 import pymodbus.exceptions
 
 # log level
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 config = configparser.ConfigParser()
 config.read('pv_modbus_config.ini')
