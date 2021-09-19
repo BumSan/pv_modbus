@@ -54,6 +54,13 @@ def set_standby_if_required(wallbox_connection, wallbox: WBSystemState):
     if wallbox.charge_state == WBDef.CHARGE_NOPLUG1 or wallbox.charge_state == WBDef.CHARGE_NOPLUG2:
         if wallbox.standby_active == WBDef.DISABLE_STANDBY:
             wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
+            wallbox.standby_active = WBDef.ENABLE_STANDBY
+
+
+# deactivate standby
+def deactivate_standby(wallbox_connection, wallbox: WBSystemState):
+    wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.DISABLE_STANDBY)
+    wallbox.standby_active = WBDef.DISABLE_STANDBY
 
 
 def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
@@ -282,7 +289,8 @@ def main():
             # check for standby activation (.. saves 4 Watt if no Car is plugged in)
             for wb in wallbox:
                 wb.charge_state = wallbox_connection.get_charging_state(wb.slave_id)
-                set_standby_if_required(wallbox_connection, wb)
+                #set_standby_if_required(wallbox_connection, wb)
+                deactivate_standby(wallbox_connection, wb)
 
             # get data for logger
             # Get the PV data (all in Watt)

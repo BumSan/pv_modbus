@@ -8,4 +8,4 @@ class PV_Switch:
         GPIO.setup(gpio_number, GPIO.IN)
 
     def is_switch_set_to_pv_only(self):
-        return GPIO.input(self.gpio_number)
+        return not GPIO.input(self.gpio_number)  # the switch is installed in a way that True -> no PV, False -> PV
