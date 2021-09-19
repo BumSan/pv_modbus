@@ -21,8 +21,8 @@ class WBDef:
 
 
 class ModbusRTUConfig:
-    def __init__(self, mode: str, port: str, timeout: int, baudrate: int, bytesize: int, parity: str, stopbits: int):
-        self.mode = mode
+    def __init__(self, method: str, port: str, timeout: int, baudrate: int, bytesize: int, parity: str, stopbits: int):
+        self.method = method
         self.port = port
         self.timeout = timeout
         self.baudrate = baudrate
@@ -40,7 +40,7 @@ class ModbusRTUHeidelbergWB:
         self.wb_read_input = wb_read_input
         self.wb_read_holding = wb_read_holding
         self.wb_write_holding = wb_write_holding
-        self.wb_handle = ModbusSerialClient(mode=wb_config.mode
+        self.wb_handle = ModbusSerialClient(method=wb_config.method
                                             , port=wb_config.port
                                             , timeout=wb_config.timeout
                                             , baudrate=wb_config.baudrate
@@ -53,8 +53,8 @@ class ModbusRTUHeidelbergWB:
             logging.fatal('No Connection possible to WB Heidelberg')
 
     def close_wb_heidelberg(self):
-        if not self.wb_handle.close():
-            logging.fatal('Closing connection to WB Heidelberg')
+        self.wb_handle.close()
+        logging.fatal('Closing connection to WB Heidelberg')
 
     # do all the Read Input Registers
     def _call_remote_input_registers(self, slave_id: int, register_set: ModbusRegisters):

@@ -232,7 +232,7 @@ def main():
     solarlog_connection = ModbusTCPSolarLog(config_solar_log, SolarLogReadInputs())
 
     # RTU
-    config_wb_heidelberg = ModbusRTUConfig('rtu', WB_RTU_DEVICE, timeout=3, baudrate=19200, bytesize=8,
+    config_wb_heidelberg = ModbusRTUConfig(method='rtu', port=WB_RTU_DEVICE, timeout=3, baudrate=19200, bytesize=8,
                                            parity='E',
                                            stopbits=1)
     wallbox_connection = ModbusRTUHeidelbergWB(wb_config=config_wb_heidelberg
