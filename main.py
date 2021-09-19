@@ -274,6 +274,8 @@ def main():
                     wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
             else:
                 logging.fatal('connect_wb_heidelberg failed')
+                time.sleep(5)
+                continue
         except Exception as e:
             logging.fatal(str(e))
             logging.fatal('Connection error. Could not connect to WB. Trying again.')
