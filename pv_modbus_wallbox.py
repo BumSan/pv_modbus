@@ -63,7 +63,6 @@ class ModbusRTUHeidelbergWB:
         read = self.wb_handle.read_input_registers(register_set.register
                                                    , register_set.length
                                                    , unit=slave_id)
-        logging.info('%s', read.registers)
         return read.registers
 
     def get_charging_state(self, slave_id: int):
@@ -109,10 +108,11 @@ class ModbusRTUHeidelbergWB:
                                                       , unit=slave_id)
             if response.isError():
                 logging.fatal('Could not write Register %s', register_set.register)
+                return False
             return response
         else:
             logging.warning('Testmode active')
-            return
+            return True
 
     def set_standby_control(self, slave_id: int, val):
         return self._call_remote_write_holding_registers(self.wb_write_holding.standByControl, val, slave_id)

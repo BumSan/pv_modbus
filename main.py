@@ -51,25 +51,29 @@ GPIO_SWITCH = int(config['SWITCH']['GPIO_SWITCH'])
 
 # check if we have to activate standby
 def set_standby_if_required(wallbox_connection, wallbox: WBSystemState):
-    if wallbox.charge_state == WBDef.CHARGE_NOPLUG1 or wallbox.charge_state == WBDef.CHARGE_NOPLUG2:
+    if is_plug_connected_and_charge_ready(wallbox):
         if wallbox.standby_active == WBDef.DISABLE_STANDBY:
-            wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY)
-            wallbox.standby_active = WBDef.ENABLE_STANDBY
+            if wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY):
+                wallbox.standby_active = WBDef.ENABLE_STANDBY
 
 
 # deactivate standby
 def deactivate_standby(wallbox_connection, wallbox: WBSystemState):
-    wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.DISABLE_STANDBY)
-    wallbox.standby_active = WBDef.DISABLE_STANDBY
+    if wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.DISABLE_STANDBY):
+        wallbox.standby_active = WBDef.DISABLE_STANDBY
 
 
 def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
-    return wallbox.charge_state == WBDef.CHARGE_PLUG_NO_REQUEST1 or wallbox.charge_state == WBDef.CHARGE_PLUG_NO_REQUEST2
+    return wallbox.charge_state == WBDef.CHARGE_PLUG_NO_REQUEST1 \
+            or wallbox.charge_state == WBDef.CHARGE_PLUG_NO_REQUEST2 \
+            or wallbox.charge_state == WBDef.CHARGE_REQUEST1 \
+            or wallbox.charge_state == WBDef.CHARGE_REQUEST2
 
 
 # wrapper so we can filter and work on min time
 def set_current_for_wallbox(wallbox_connection, wallbox: WBSystemState, current):
-    wallbox_connection.set_max_current(wallbox.slave_id, current)
+    if wallbox_connection.set_max_current(wallbox.slave_id, current):
+        wallbox.max_current_active = current
 
 
 def activate_grid_charge(wallbox_connection, wallbox: List[WBSystemState]):
@@ -83,15 +87,14 @@ def activate_grid_charge(wallbox_connection, wallbox: List[WBSystemState]):
         for wb in wallbox:
             if is_plug_connected_and_charge_ready(wb):  # connected
                 set_current_for_wallbox(wallbox_connection, wb, WB_SYSTEM_MAX_CURRENT // connected)
-                wb.max_current_active = WB_SYSTEM_MAX_CURRENT // connected
                 logging.warning('Wallbox ID %s, current set to %s A', wb.slave_id, WB_SYSTEM_MAX_CURRENT // connected)
                 if not wb.grid_charge_active:
                     wb.grid_charge_active = True
                     wb.last_charge_activation = datetime.datetime.now()
             else:  # disconnected
+                set_current_for_wallbox(wallbox_connection, wb, 0)
                 if wb.grid_charge_active:
                     wb.grid_charge_active = False
-                    wb.max_current_active = 0
                     wb.last_charge_deactivation = datetime.datetime.now()
     else:
         logging.info('No Connector connected')
@@ -127,24 +130,22 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                 # check if we have enough power for this WB. If not we try to switch it off
                 if used_current >= (WB_MIN_CURRENT - PV_CHARGE_AMP_TOLERANCE):
                     # enough power. we already charge so no check required
-                    wallbox_connection.set_max_current(wb.slave_id, used_current)
-                    wb.max_current_active = used_current
+                    set_current_for_wallbox(wallbox_connection, wb, used_current)
                     logging.warning('Setting Wallbox ID %s to %s A', wb.slave_id, used_current)
                 else:  # we do not have enough power. Check if we can deactivate this WB
                     if is_pv_charge_deactivation_allowed(wb):
                         used_current = 0
-                        wallbox_connection.set_max_current(wb.slave_id, used_current)
+                        set_current_for_wallbox(wallbox_connection, wb, used_current)
                         deactivate_pv_charge_for_wallbox(wb)
                         logging.warning('Charge deactivation for Wallbox ID %s', wb.slave_id)
                     else:  # not allowed, so reduce it to min value for now and try again later
                         used_current = WB_MIN_CURRENT
-                        wallbox_connection.set_max_current(wb.slave_id, used_current)
-                        wb.max_current_active = used_current
+                        set_current_for_wallbox(wallbox_connection, wb, used_current)
                         logging.error('Charge deactivation for Wallbox ID %s not allowed due to time constraints',
                                       wb.slave_id)
             else:  # no charge request (anymore)
                 used_current = 0
-                wallbox_connection.set_max_current(wb.slave_id, used_current)
+                set_current_for_wallbox(wallbox_connection, wb, used_current)
                 deactivate_pv_charge_for_wallbox(wb)
                 logging.info('No charge request anymore for Wallbox ID %s. Deactivating', wb.slave_id)
 
@@ -167,7 +168,7 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
 
                     # check if we can activate this WB. If not we just try the next one
                     if is_pv_charge_activation_allowed(wb):
-                        wallbox_connection.set_max_current(wb.slave_id, used_current)
+                        set_current_for_wallbox(wallbox_connection, wb, used_current)
                         logging.info('Setting Wallbox ID %s to %s A', wb.slave_id, used_current)
                         activate_pv_charge_for_wallbox(wb, used_current)
                         # keep track of the the current contingent
@@ -271,7 +272,7 @@ def main():
             # if we lose communication to the WB, assume we lose it to all; and split max current of 16A evenly
             if wallbox_connection.connect_wb_heidelberg():
                 for wb in wallbox:
-                    wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
+                    wallbox_connection.set_failsafe_max_current(wb.slave_id, int(WB_SYSTEM_MAX_CURRENT / len(wallbox)))
             else:
                 logging.fatal('connect_wb_heidelberg failed. Trying again.')
                 time.sleep(5)

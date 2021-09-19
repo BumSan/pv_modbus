@@ -22,6 +22,7 @@ WALLBOX_MIN_WRITE_CYCLE = float(config['LOGGING']['WALLBOX_MIN_WRITE_CYCLE'])
 # every x seconds, at least (earlier if data has changed)
 SOLARLOG_MIN_WRITE_CYCLE = float(config['LOGGING']['SOLARLOG_MIN_WRITE_CYCLE'])
 
+
 class PVDatabase:
     solarlog_data: SolarLogData = None
     solarlog_lastwrite = None
