@@ -5,18 +5,6 @@ from pv_register_config import HeidelbergWBReadHolding, HeidelbergWBWriteHolding
 
 import logging
 
-# Get handles to the various pymodbus logs
-server_log          = logging.getLogger("pysnmp.server")
-client_log          = logging.getLogger("pysnmp.client")
-protocol_log        = logging.getLogger("pysnmp.protocol")
-store_log           = logging.getLogger("pysnmp.store")
-
-# Enable logging levels
-server_log.setLevel(logging.DEBUG)
-protocol_log.setLevel(logging.DEBUG)
-client_log.setLevel(logging.DEBUG)
-store_log.setLevel(logging.DEBUG)
-
 
 class WBDef:
     ENABLE_STANDBY = 0
@@ -61,8 +49,10 @@ class ModbusRTUHeidelbergWB:
                                             , stopbits=wb_config.stopbits)
 
     def connect_wb_heidelberg(self):
-        if not self.wb_handle.connect():
+        result = self.wb_handle.connect()
+        if not result:
             logging.fatal('No Connection possible to WB Heidelberg')
+        return result
 
     def close_wb_heidelberg(self):
         self.wb_handle.close()
