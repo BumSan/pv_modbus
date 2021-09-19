@@ -64,7 +64,7 @@ def deactivate_standby(wallbox_connection, wallbox: WBSystemState):
 
 
 def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
-    return wallbox.charge_state == WBDef.CHARGE_REQUEST1 or wallbox.charge_state == WBDef.CHARGE_REQUEST2
+    return wallbox.charge_state == WBDef.CHARGE_PLUG_NO_REQUEST1 or wallbox.charge_state == WBDef.CHARGE_PLUG_NO_REQUEST2
 
 
 # wrapper so we can filter and work on min time
