@@ -113,7 +113,7 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
     used_current = 0.0
 
     # are any of the Wallboxes already charging with PV? then we update these first
-    logging.debug('Working on already active WBs first')
+    logging.info('Working on already active WBs first')
     for wb in wallbox:
         if wb.pv_charge_active:
             # WBs without charge request get nothing:
@@ -153,7 +153,7 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
             logging.info('Still Available current: %s A', available_current)
 
     # 2nd step: if we have enough power left, we can check to activate WBs that do not charge yet
-    logging.debug('Check for further Wallboxes to be activated')
+    logging.info('Check for further Wallboxes to be activated')
     for wb in wallbox:
         # WBs without charge request get nothing:
         if is_plug_connected_and_charge_ready(wb):
@@ -177,10 +177,10 @@ def activate_pv_charge(wallbox_connection, wallbox: List[WBSystemState], availab
                         logging.error('Charge activation for Wallbox ID %s not allowed due to time constraints',
                                       wb.slave_id)
             else:  # not enough power left
-                logging.debug('Not enough power for charging any further Wallboxes')
+                logging.info('Not enough power for charging any further Wallboxes')
                 break
         else:
-            logging.debug('This WB has no charge request')
+            logging.info('This WB has no charge request')
 
 
 # check if WB was inactive for long enough (to avoid fast switch on/off)
@@ -329,6 +329,7 @@ def main():
                 # ===================
                 # Charge only from grid (implicitly includes PV when available)
                 # ===================
+                logging.warning('== Grid-Charge only active ==')
                 activate_grid_charge(wallbox_connection, wallbox)
             else:
                 # ===================
