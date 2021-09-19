@@ -68,14 +68,18 @@ class ModbusRTUHeidelbergWB:
 
     def get_charging_state(self, slave_id: int):
         if not WBDef.FAKE_WB_CONNECTION:
-            return self._call_remote_input_registers(slave_id, self.wb_read_input.chargingState)
+            read = self._call_remote_input_registers(slave_id, self.wb_read_input.chargingState)
+            logging.info('Charge state for WB %s: %s', slave_id, read)
+            return read
         else:
             logging.warning('Testmode active')
             return WBDef.CHARGE_REQUEST1
 
     def get_actual_charge_power(self, slave_id: int):  # returns in Watt
         if not WBDef.FAKE_WB_CONNECTION:
-            return self._call_remote_input_registers(slave_id, self.wb_read_input.actualChargePower)
+            read = self._call_remote_input_registers(slave_id, self.wb_read_input.actualChargePower)
+            logging.info('Charge power for WB %s: %s', slave_id, read)
+            return read
         else:
             logging.warning('Testmode active')
             return 100
