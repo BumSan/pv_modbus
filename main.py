@@ -273,8 +273,9 @@ def main():
 
             for wb in wallbox:
                 wallbox_connection.set_failsafe_max_current(slave_id=wb.slave_id, val=8)
-        except:
-            logging.error('Connection error. Could not connect to WB. Trying again.')
+        except Exception as e:
+            logging.fatal(str(e))
+            logging.fatal('Connection error. Could not connect to WB. Trying again.')
             time.sleep(5)
             continue
         finally:
@@ -367,7 +368,8 @@ def main():
             # chill for some secs
             logging.debug('Calculation cycle ends')
             logging.debug('')
-        except:
+        except Exception as e:
+            logging.fatal(str(e))
             logging.fatal('Unknown error occured with communication to WB. Trying again after some seconds.')
 
         # write PV into DB
