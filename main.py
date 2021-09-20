@@ -235,7 +235,8 @@ def main():
     # RTU
     config_wb_heidelberg = ModbusRTUConfig(method='rtu', port=WB_RTU_DEVICE, timeout=3, baudrate=19200, bytesize=8,
                                            parity='E',
-                                           stopbits=1)
+                                           stopbits=1,
+                                           strict=False)
     wallbox_connection = ModbusRTUHeidelbergWB(wb_config=config_wb_heidelberg
                                                , wb_read_input=HeidelbergWBReadInputs()
                                                , wb_read_holding=HeidelbergWBReadHolding()

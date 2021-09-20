@@ -21,7 +21,7 @@ class WBDef:
 
 
 class ModbusRTUConfig:
-    def __init__(self, method: str, port: str, timeout: int, baudrate: int, bytesize: int, parity: str, stopbits: int):
+    def __init__(self, method: str, port: str, timeout: int, baudrate: int, bytesize: int, parity: str, stopbits: int, strict: bool):
         self.method = method
         self.port = port
         self.timeout = timeout
@@ -29,6 +29,7 @@ class ModbusRTUConfig:
         self.bytesize = bytesize
         self.parity = parity
         self.stopbits = stopbits
+        self.strict = strict
 
 
 class ModbusRTUHeidelbergWB:
@@ -46,9 +47,14 @@ class ModbusRTUHeidelbergWB:
                                             , baudrate=wb_config.baudrate
                                             , bytesize=wb_config.bytesize
                                             , parity=wb_config.parity
-                                            , stopbits=wb_config.stopbits)
+                                            , stopbits=wb_config.stopbits
+                                            , strict=wb_config.strict)
+        self.wb_handle.inter_char_timeout = 0.05  # https://github.com/riptideio/pymodbus/issues/353
 
     def connect_wb_heidelberg(self):
+        if WBDef.FAKE_WB_CONNECTION:
+            return True
+
         result = self.wb_handle.connect()
         if not result:
             logging.fatal('No Connection possible to WB Heidelberg')
