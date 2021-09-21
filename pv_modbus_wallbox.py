@@ -128,8 +128,6 @@ class ModbusRTUHeidelbergWB:
         return self._call_remote_write_holding_registers(self.wb_write_holding.standByControl, val, slave_id)
 
     def set_max_current(self, slave_id: int, val: int):
-        # convert Ampere to WB values
-        val = val*10
         return self._call_remote_write_holding_registers(self.wb_write_holding.maxCurrent, val, slave_id)
 
     def set_failsafe_max_current(self, slave_id: int, val: int):

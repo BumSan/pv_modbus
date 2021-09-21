@@ -75,8 +75,8 @@ def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
 
 
 # wrapper so we can filter and work on min time
-def set_current_for_wallbox(wallbox_connection, wallbox: WBSystemState, current):
-    if wallbox_connection.set_max_current(wallbox.slave_id, current):
+def set_current_for_wallbox(wallbox_connection, wallbox: WBSystemState, current: float):
+    if wallbox_connection.set_max_current(wallbox.slave_id, amp_rounded_to_wb_format(current)):
         wallbox.max_current_active = current
 
 
@@ -225,6 +225,12 @@ def watt_to_amp_rounded(val_watt: int) -> float:
     val_amp *= 10
     val_amp = int(val_amp)
     val_amp /= 10
+    return val_amp
+
+
+def amp_rounded_to_wb_format(val_amp: float) -> int:
+    val_amp *= 10
+    val_amp = int(val_amp)
     return val_amp
 
 
