@@ -3,6 +3,7 @@ from pv_modbus_wallbox import WBDef
 import pv_modbus_wallbox
 import datetime
 from typing import List
+import wallbox_proxy
 from wallbox_proxy import WallboxProxy
 from toolbox import Toolbox
 import pytest
@@ -56,7 +57,7 @@ def reset_wallboxes(wallboxes: List[WBSystemState]):
 @pytest.fixture
 def setup_wallboxes_off_state(mocker):
     mocker.patch(
-        'wallbox_proxy.ModbusRTUHeidelbergWB.set_max_current',
+        'pv_modbus.ModbusRTUHeidelbergWB.set_max_current',
         return_value=True
     )
 
@@ -73,7 +74,7 @@ def setup_wallboxes_off_state(mocker):
 @pytest.fixture
 def setup_wallboxes_pv_on(mocker):
     mocker.patch(
-        'wallbox_proxy.ModbusRTUHeidelbergWB.set_max_current',
+        'pv_modbus.ModbusRTUHeidelbergWB.set_max_current',
         return_value=True
     )
 

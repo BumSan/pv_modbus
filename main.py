@@ -27,7 +27,7 @@ def main():
     wallbox = [WBSystemState(cfg.WB1_SLAVEID), WBSystemState(cfg.WB2_SLAVEID)]
     wallbox.sort(key=lambda x: x.slave_id)  # make the Slave ID also the priority of the WB
 
-    wb_prox = WallboxProxy()
+    wb_prox = WallboxProxy(cfg)
 
     # SolarLog
     config_solar_log = ModbusTCPConfig(cfg.SOLARLOG_IP, cfg.SOLARLOG_PORT, slave_id=cfg.SOLARLOG_SLAVEID)
@@ -64,7 +64,7 @@ def main():
         wb.last_charge_deactivation = datetime.datetime.now()
 
     solar_log_data = SolarLogData()
-    solar_log_data_write_enable = 0
+    db_write_enable = 0
     database = PVDatabase(cfg)
 
     # make sure that failsafe Current is always set
@@ -172,7 +172,7 @@ def main():
                     # Charge galore
                     wb_prox.activate_pv_charge(wallbox_connection, wallbox, Toolbox.watt_to_amp_rounded(available_power))
 
-            # chill for some secs
+
             logging.debug('Calculation cycle ends')
             logging.debug('')
         except Exception as e:
@@ -180,15 +180,26 @@ def main():
             logging.fatal('Unknown error occured with communication to WB. Trying again after some seconds.')
 
         # write PV into DB
-        if not solar_log_data_write_enable % cfg.SOLARLOG_WRITE_EVERY:
+        # while charging, write any changed log. Otherwise only after x min
+        logging.info('DB write section')
+
+        charging = False
+        for wb in wallbox:
+            if wb.pv_charge_active or wb.grid_charge_active:
+                charging = True
+
+        if charging:
             database.write_solarlog_data_only_if_changed(solar_log_data)
-            solar_log_data_write_enable = 0
+            database.write_wallbox_data_only_if_changed(wallbox)
+        else:
+            if not db_write_enable % cfg.SOLARLOG_WRITE_EVERY:
+                database.write_solarlog_data_only_if_changed(solar_log_data)
+                database.write_wallbox_data_only_if_changed(wallbox)
+                db_write_enable = 0
 
-        solar_log_data_write_enable += 1
+        db_write_enable += 1
 
-        # write wallbox into DB
-        database.write_wallbox_data_only_if_changed(wallbox)
-
+        # chill for some secs
         time.sleep(5)
     # end loop
 
