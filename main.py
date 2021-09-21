@@ -61,6 +61,9 @@ def set_standby_if_required(wallbox_connection, wallbox: WBSystemState):
 def deactivate_standby(wallbox_connection, wallbox: WBSystemState):
     if wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.DISABLE_STANDBY):
         wallbox.standby_active = WBDef.DISABLE_STANDBY
+        logging.warning('WB %s StandBy Disabled', wallbox.slave_id)
+    else:
+        logging.fatal('WB %s StandBy _not_ Disabled', wallbox.slave_id)
 
 
 def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
@@ -292,7 +295,9 @@ def main():
             # check all WB for charge plug and charge request
             # check for standby activation (.. saves 4 Watt if no Car is plugged in)
             for wb in wallbox:
-                wb.charge_state = wallbox_connection.get_charging_state(wb.slave_id)
+                result = wallbox_connection.get_charging_state(wb.slave_id)
+                if result is not False:
+                    wb.charge_state = result
                 #set_standby_if_required(wallbox_connection, wb)
                 deactivate_standby(wallbox_connection, wb)
 
