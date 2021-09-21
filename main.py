@@ -59,11 +59,12 @@ def set_standby_if_required(wallbox_connection, wallbox: WBSystemState):
 
 # deactivate standby
 def deactivate_standby(wallbox_connection, wallbox: WBSystemState):
-    if wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.DISABLE_STANDBY):
-        wallbox.standby_active = WBDef.DISABLE_STANDBY
-        logging.warning('WB %s StandBy Disabled', wallbox.slave_id)
-    else:
-        logging.fatal('WB %s StandBy _not_ Disabled', wallbox.slave_id)
+    if wallbox.standby_active != WBDef.DISABLE_STANDBY:
+        if wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.DISABLE_STANDBY):
+            wallbox.standby_active = WBDef.DISABLE_STANDBY
+            logging.warning('WB %s StandBy Disabled', wallbox.slave_id)
+        else:
+            logging.fatal('WB %s StandBy _not_ Disabled', wallbox.slave_id)
 
 
 def is_plug_connected_and_charge_ready(wallbox: WBSystemState) -> bool:
