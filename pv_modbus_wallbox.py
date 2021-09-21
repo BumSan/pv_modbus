@@ -69,7 +69,7 @@ class ModbusRTUHeidelbergWB:
         read = self.wb_handle.read_input_registers(register_set.register
                                                    , register_set.length
                                                    , unit=slave_id)
-        return read.registers
+        return read.registers[0]
 
     def get_charging_state(self, slave_id: int):
         if not WBDef.FAKE_WB_CONNECTION:
