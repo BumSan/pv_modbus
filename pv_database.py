@@ -1,26 +1,11 @@
-import copy
-import datetime
-from typing import List
 from influxdb import InfluxDBClient
 from pv_modbus_solarlog import SolarLogData
 from wallbox_system_state import WBSystemState
+from config_file import ConfigFile
 import logging
-import configparser
-
-
-config = configparser.ConfigParser()
-config.read('pv_modbus_config.ini')
-
-INFLUX_HOST = config['LOGGING']['INFLUX_HOST']
-INFLUX_PORT = int(config['LOGGING']['INFLUX_PORT'])
-INFLUX_USER = config['LOGGING']['INFLUX_USER']
-INFLUX_PWD = config['LOGGING']['INFLUX_PWD']
-INFLUX_DB_NAME = config['LOGGING']['INFLUX_DB_NAME']
-
-# every x seconds, at least (earlier if data has changed)
-WALLBOX_MIN_WRITE_CYCLE = float(config['LOGGING']['WALLBOX_MIN_WRITE_CYCLE'])
-# every x seconds, at least (earlier if data has changed)
-SOLARLOG_MIN_WRITE_CYCLE = float(config['LOGGING']['SOLARLOG_MIN_WRITE_CYCLE'])
+import copy
+import datetime
+from typing import List
 
 
 class PVDatabase:
@@ -29,7 +14,8 @@ class PVDatabase:
     wallbox_data: List[WBSystemState] = None
     wallbox_lastwrite = None
 
-    def __init__(self):
+    def __init__(self, cfg: ConfigFile):
+        self.cfg = cfg
         self.solarlog_lastwrite = datetime.datetime.now()
         self.wallbox_lastwrite = datetime.datetime.now()
 
@@ -39,15 +25,15 @@ class PVDatabase:
 
         try:
             # Influx
-            influx = InfluxDBClient(host=INFLUX_HOST
-                                    , port=INFLUX_PORT
-                                    , username=INFLUX_USER
-                                    , password=INFLUX_PWD)
+            influx = InfluxDBClient(host=self.cfg.INFLUX_HOST
+                                    , port=self.cfg.INFLUX_PORT
+                                    , username=self.cfg.INFLUX_USER
+                                    , password=self.cfg.INFLUX_PWD)
 
             line_solar = 'solarlog,sensor=solarlog1 pv_output=' + str(solar_log_data.actual_output) \
                          + ',consumption=' + str(solar_log_data.actual_consumption)
 
-            if not influx.write([line_solar], params={'epoch': 's', 'db': INFLUX_DB_NAME}, expected_response_code=204, protocol='line'):
+            if not influx.write([line_solar], params={'epoch': 's', 'db': self.cfg.INFLUX_DB_NAME}, expected_response_code=204, protocol='line'):
                 logging.error('SolarLog Data write failed')
 
             influx.close()
@@ -59,7 +45,7 @@ class PVDatabase:
         if self.solarlog_data is not None:
             if self.solarlog_data != solar_log_data:
                 self.write_solarlog_data(solar_log_data)
-            elif time_diff.total_seconds() > SOLARLOG_MIN_WRITE_CYCLE:
+            elif time_diff.total_seconds() > self.cfg.SOLARLOG_MIN_WRITE_CYCLE:
                 self.write_solarlog_data(solar_log_data)
                 logging.debug('SolarLog Data written due to min cycle time')
             else:
@@ -73,10 +59,10 @@ class PVDatabase:
 
         try:
             # Influx
-            influx = InfluxDBClient(host=INFLUX_HOST
-                                    , port=INFLUX_PORT
-                                    , username=INFLUX_USER
-                                    , password=INFLUX_PWD)
+            influx = InfluxDBClient(host=self.cfg.INFLUX_HOST
+                                    , port=self.cfg.INFLUX_PORT
+                                    , username=self.cfg.INFLUX_USER
+                                    , password=self.cfg.INFLUX_PWD)
             for wb in wallboxes:
                 line_wallbox = 'wallbox,sensor=wallbox' + str(wb.slave_id)\
                                + ' charge_state=' + str(wb.charge_state) \
@@ -85,7 +71,7 @@ class PVDatabase:
                                + ',max_current_active=' + str(wb.max_current_active) \
                                + ',actual_current_active=' + str(wb.actual_current_active)
 
-                if not influx.write([line_wallbox], params={'epoch': 's', 'db': INFLUX_DB_NAME}, expected_response_code=204, protocol='line'):
+                if not influx.write([line_wallbox], params={'epoch': 's', 'db': self.cfg.INFLUX_DB_NAME}, expected_response_code=204, protocol='line'):
                     logging.error('Wallbox Data write failed')
 
             influx.close()
@@ -105,7 +91,7 @@ class PVDatabase:
         else:
             data_changed = True
 
-        if time_diff.total_seconds() > WALLBOX_MIN_WRITE_CYCLE:
+        if time_diff.total_seconds() > self.cfg.WALLBOX_MIN_WRITE_CYCLE:
             data_changed = True
             logging.debug('Wallbox Data written due to min cycle time')
 
