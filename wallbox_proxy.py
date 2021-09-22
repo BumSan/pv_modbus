@@ -2,6 +2,8 @@ import datetime
 from typing import List
 from wallbox_system_state import WBSystemState
 from pv_modbus_wallbox import WBDef
+from pv_modbus_wallbox import ModbusRTUHeidelbergWB
+import pv_modbus_wallbox
 from toolbox import Toolbox
 from config_file import ConfigFile
 import logging
@@ -13,14 +15,14 @@ class WallboxProxy:
         self.cfg = cfg
 
     # check if we have to activate standby
-    def set_standby_if_required(self, wallbox_connection, wallbox: WBSystemState):
+    def set_standby_if_required(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: WBSystemState):
         if self.is_plug_connected_and_charge_ready(wallbox):
             if wallbox.standby_active == WBDef.DISABLE_STANDBY:
                 if wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.ENABLE_STANDBY):
                     wallbox.standby_active = WBDef.ENABLE_STANDBY
 
     # deactivate standby
-    def deactivate_standby(self, wallbox_connection, wallbox: WBSystemState):
+    def deactivate_standby(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: WBSystemState):
         if wallbox.standby_active != WBDef.DISABLE_STANDBY:
             if wallbox_connection.set_standby_control(wallbox.slave_id, WBDef.DISABLE_STANDBY):
                 wallbox.standby_active = WBDef.DISABLE_STANDBY
@@ -35,11 +37,11 @@ class WallboxProxy:
                 or wallbox.charge_state == WBDef.CHARGE_REQUEST2
 
     # wrapper so we can filter and work on min time
-    def set_current_for_wallbox(self, wallbox_connection, wallbox: WBSystemState, current: float):
+    def set_current_for_wallbox(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: WBSystemState, current: float):
         if wallbox_connection.set_max_current(wallbox.slave_id, Toolbox.amp_rounded_to_wb_format(current)):
             wallbox.max_current_active = current
 
-    def activate_grid_charge(self, wallbox_connection, wallbox: List[WBSystemState]):
+    def activate_grid_charge(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: List[WBSystemState]):
         # check how many Plugs are connected in correct state
         connected = 0
         for wb in wallbox:
@@ -72,7 +74,7 @@ class WallboxProxy:
         wallbox.max_current_active = current
         wallbox.last_charge_activation = datetime.datetime.now()
 
-    def activate_pv_charge(self, wallbox_connection, wallbox: List[WBSystemState], available_current):
+    def activate_pv_charge(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: List[WBSystemState], available_current):
         used_current = 0.0
 
         # are any of the Wallboxes already charging with PV? then we update these first
@@ -163,14 +165,14 @@ class WallboxProxy:
         time_diff = datetime.datetime.now() - wallbox.last_charge_activation
         return time_diff.total_seconds() > self.cfg.MIN_TIME_PV_CHARGE
 
-    def deactivate_grid_charge(self, wallbox_connection, wallbox: List[WBSystemState]):
+    def deactivate_grid_charge(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: List[WBSystemState]):
         for wb in wallbox:
             if wb.grid_charge_active:
                 wallbox_connection.set_max_current(wb.slave_id, 0)
                 wb.grid_charge_active = False
                 wb.last_charge_deactivation = datetime.datetime.now()
 
-    def deactivate_pv_charge(self, wallbox_connection, wallbox: List[WBSystemState]):
+    def deactivate_pv_charge(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: List[WBSystemState]):
         for wb in wallbox:
             if wb.pv_charge_active:
                 wallbox_connection.set_max_current(wb.slave_id, 0)
