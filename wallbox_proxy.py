@@ -156,12 +156,12 @@ class WallboxProxy:
                 logging.info('This WB has no charge request')
 
     # check if WB was inactive for long enough (to avoid fast switch on/off)
-    def is_pv_charge_activation_allowed(self, wallbox) -> bool:
+    def is_pv_charge_activation_allowed(self, wallbox: WBSystemState) -> bool:
         time_diff = datetime.datetime.now() - wallbox.last_charge_deactivation
         return time_diff.total_seconds() > self.cfg.MIN_WAIT_BEFORE_PV_ON
 
     # check if WB was active for long enough (to avoid fast switch on/off)
-    def is_pv_charge_deactivation_allowed(self, wallbox) -> bool:
+    def is_pv_charge_deactivation_allowed(self, wallbox: WBSystemState) -> bool:
         time_diff = datetime.datetime.now() - wallbox.last_charge_activation
         return time_diff.total_seconds() > self.cfg.MIN_TIME_PV_CHARGE
 
