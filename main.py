@@ -4,7 +4,7 @@ from pv_modbus_wallbox import HeidelbergWBReadInputs, HeidelbergWBReadHolding, H
 from wallbox_system_state import WBSystemState
 from pv_database import PVDatabase
 from wallbox_proxy import WallboxProxy
-from toolbox import Toolbox
+from toolbox import Toolbox, TimeTools
 from config_file import ConfigFile
 import logging
 import time
@@ -28,6 +28,7 @@ def main():
     wallbox.sort(key=lambda x: x.slave_id)  # make the Slave ID also the priority of the WB
 
     wb_prox = WallboxProxy(cfg)
+    time_tools = TimeTools()
 
     # SolarLog
     config_solar_log = ModbusTCPConfig(cfg.SOLARLOG_IP, cfg.SOLARLOG_PORT, slave_id=cfg.SOLARLOG_SLAVEID)
@@ -192,12 +193,11 @@ def main():
             database.write_solarlog_data_only_if_changed(solar_log_data)
             database.write_wallbox_data_only_if_changed(wallbox)
         else:
-            if not db_write_enable % cfg.SOLARLOG_WRITE_EVERY:
+            # save every x seconds
+            if time_tools.seconds_have_passed_since_trigger() > cfg.SOLARLOG_WRITE_EVERY:
                 database.write_solarlog_data_only_if_changed(solar_log_data)
                 database.write_wallbox_data_only_if_changed(wallbox)
-                db_write_enable = 0
-
-        db_write_enable += 1
+                time_tools.trigger_time()  # written
 
         # chill for some secs
         time.sleep(5)

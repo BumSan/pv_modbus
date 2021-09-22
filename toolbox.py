@@ -1,3 +1,4 @@
+import datetime
 
 class Toolbox:
 
@@ -19,3 +20,15 @@ class Toolbox:
         amp *= 10
         amp = int(amp)
         return amp
+
+
+class TimeTools:
+    def __init__(self):
+        self.time_start = datetime.datetime.now()
+
+    def seconds_have_passed_since_trigger(self):
+        time_diff = datetime.datetime.now() - self.time_start
+        return time_diff.total_seconds()
+
+    def trigger_time(self):
+        self.time_start = datetime.datetime.now()
