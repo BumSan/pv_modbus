@@ -194,7 +194,7 @@ def main():
             database.write_wallbox_data_only_if_changed(wallbox)
         else:
             # save every x seconds
-            if time_tools.seconds_have_passed_since_trigger() > cfg.SOLARLOG_WRITE_EVERY:
+            if time_tools.seconds_have_passed_since_trigger() >= cfg.SOLARLOG_WRITE_EVERY:
                 database.write_solarlog_data_only_if_changed(solar_log_data)
                 database.write_wallbox_data_only_if_changed(wallbox)
                 time_tools.trigger_time()  # written
