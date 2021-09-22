@@ -1,11 +1,10 @@
-import datetime
-from typing import List
 from wallbox_system_state import WBSystemState
 from pv_modbus_wallbox import WBDef
 from pv_modbus_wallbox import ModbusRTUHeidelbergWB
-import pv_modbus_wallbox
 from toolbox import Toolbox
 from config_file import ConfigFile
+import datetime
+from typing import List
 import logging
 
 
