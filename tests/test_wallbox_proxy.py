@@ -28,22 +28,6 @@ def setup_config():
     return cfg
 
 
-def test_is_plug_connected_and_charge_ready(setup_config):
-    wbprox = WallboxProxy(setup_config)
-    wallbox = WBSystemState(1)
-    wallbox.charge_state = WBDef.CHARGE_NOPLUG1
-    val = wbprox.is_plug_connected_and_charge_ready(wallbox)
-    assert not val
-
-    wallbox.charge_state = WBDef.CHARGE_REQUEST1
-    val = wbprox.is_plug_connected_and_charge_ready(wallbox)
-    assert val
-
-    wallbox.charge_state = WBDef.CHARGE_REQUEST2
-    val = wbprox.is_plug_connected_and_charge_ready(wallbox)
-    assert val
-
-
 def reset_wallboxes(wallboxes: List[WBSystemState]):
     for wb in wallboxes:
         wb.pv_charge_active = False
@@ -69,7 +53,6 @@ def create_fake_wallbox_connection():
 
 @pytest.fixture
 def setup_wallboxes_off_state(mocker):
-
     def mock_set_max_current(self, slaveid, current):
         return True
 
@@ -90,7 +73,6 @@ def setup_wallboxes_off_state(mocker):
 
 @pytest.fixture
 def setup_wallboxes_pv_on(mocker):
-
     def mock_set_max_current(self, slaveid, current):
         return True
 
@@ -108,6 +90,23 @@ def setup_wallboxes_pv_on(mocker):
         wb.pv_charge_active = True
 
     return wallbox
+
+
+@pytest.mark.activate
+def test_is_plug_connected_and_charge_ready(setup_config):
+    wbprox = WallboxProxy(setup_config)
+    wallbox = WBSystemState(1)
+    wallbox.charge_state = WBDef.CHARGE_NOPLUG1
+    val = wbprox.is_plug_connected_and_charge_ready(wallbox)
+    assert not val
+
+    wallbox.charge_state = WBDef.CHARGE_REQUEST1
+    val = wbprox.is_plug_connected_and_charge_ready(wallbox)
+    assert val
+
+    wallbox.charge_state = WBDef.CHARGE_REQUEST2
+    val = wbprox.is_plug_connected_and_charge_ready(wallbox)
+    assert val
 
 
 @pytest.mark.activate
@@ -153,7 +152,8 @@ def test_activate_pv_charge_with_different_currents_from_off_state(setup_wallbox
         , (WB_SYSTEM_MAX_CURRENT * 2, True, WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT)
         , (WB_SYSTEM_MAX_CURRENT * 3, True, WB_SYSTEM_MAX_CURRENT, True, WB_SYSTEM_MAX_CURRENT)
     ])
-def test_activate_pv_charge_with_different_currents_from_on_state(setup_wallboxes_pv_on, setup_config, current, wb1_charge,
+def test_activate_pv_charge_with_different_currents_from_on_state(setup_wallboxes_pv_on, setup_config, current,
+                                                                  wb1_charge,
                                                                   wb1_current, wb2_charge, wb2_current):
     """use different currents (min, max, <min, > max) from Wallbox on state"""
     connection = create_fake_wallbox_connection()
@@ -170,7 +170,6 @@ def test_activate_pv_charge_with_different_currents_from_on_state(setup_wallboxe
     assert wallbox[1].max_current_active == wb2_current
 
 
-
 @pytest.mark.activate
 @pytest.mark.parametrize(
     "current,wb1_charge,wb1_current,wb2_charge,wb2_current",
@@ -184,7 +183,8 @@ def test_activate_pv_charge_with_different_currents_from_on_state(setup_wallboxe
         , (WB_SYSTEM_MAX_CURRENT * 2, False, 0, False, 0)
         , (WB_SYSTEM_MAX_CURRENT * 3, False, 0, False, 0)
     ])
-def test_activate_pv_charge_with_different_currents_without_plug(setup_wallboxes_pv_on, setup_config, current, wb1_charge,
+def test_activate_pv_charge_with_different_currents_without_plug(setup_wallboxes_pv_on, setup_config, current,
+                                                                 wb1_charge,
                                                                  wb1_current, wb2_charge, wb2_current):
     """use different currents (min, max, <min, > max) without charging plug connected"""
     connection = create_fake_wallbox_connection()
@@ -337,3 +337,27 @@ def test_activate_grid_charge(setup_wallboxes_off_state, setup_config):
     assert wallbox[0].max_current_active == 0
     assert wallbox[1].grid_charge_active
     assert wallbox[1].max_current_active == WB_SYSTEM_MAX_CURRENT
+
+
+@pytest.mark.activate
+@pytest.mark.parametrize(
+    "wb1_time_offset,wb2_time_offset,wb1_result,wb2_result",
+    [
+        (1, 1, True, True)
+        , (-1, -1, False, False)
+        , (1, -1, True, False)
+        , (-1, 1, False, True)
+    ])
+def test_is_pv_charge_activation_allowed(setup_wallboxes_off_state, setup_config, wb1_time_offset, wb2_time_offset,
+                                         wb1_result, wb2_result):
+    wallbox = setup_wallboxes_off_state
+    wbprox = WallboxProxy(setup_config)
+
+    wallbox[0].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(
+        seconds=MIN_WAIT_BEFORE_PV_ON + wb1_time_offset)
+    wallbox[1].last_charge_deactivation = datetime.datetime.now() - datetime.timedelta(
+        seconds=MIN_WAIT_BEFORE_PV_ON + wb2_time_offset)
+
+    assert wbprox.is_pv_charge_activation_allowed(wallbox[0]) == wb1_result
+    assert wbprox.is_pv_charge_activation_allowed(wallbox[1]) == wb2_result
+
