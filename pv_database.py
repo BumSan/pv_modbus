@@ -41,17 +41,14 @@ class PVDatabase:
             logging.fatal('DB Connection is gone')
 
     def write_solarlog_data_only_if_changed(self, solar_log_data: SolarLogData):
-        time_diff = datetime.datetime.now() - self.solarlog_lastwrite
         if self.solarlog_data is not None:
             if self.solarlog_data != solar_log_data:
                 self.write_solarlog_data(solar_log_data)
-            elif time_diff.total_seconds() > self.cfg.SOLARLOG_MIN_WRITE_CYCLE:
-                self.write_solarlog_data(solar_log_data)
-                logging.debug('SolarLog Data written due to min cycle time')
+                logging.info('Solarlog Data written to DB')
             else:
                 logging.debug('SolarLog Data not changed. Not written to DB')
         else:
-            self.write_solarlog_data(solar_log_data)
+            self.write_solarlog_data(solar_log_data)  # first time writing. cant compare and just write
 
     def write_wallbox_data(self, wallboxes: List[WBSystemState]):
         self.wallbox_data = copy.deepcopy(wallboxes)
@@ -79,7 +76,6 @@ class PVDatabase:
             logging.fatal('DB Connection is gone')
 
     def write_wallbox_data_only_if_changed(self, wallboxes: List[WBSystemState]):
-        time_diff = datetime.datetime.now() - self.wallbox_lastwrite
         data_changed = False
         ctr = 0
         if self.wallbox_data is not None:
@@ -89,14 +85,11 @@ class PVDatabase:
                     break
                 ctr += 1
         else:
-            data_changed = True
-
-        if time_diff.total_seconds() > self.cfg.WALLBOX_MIN_WRITE_CYCLE:
-            data_changed = True
-            logging.debug('Wallbox Data written due to min cycle time')
+            data_changed = True  # first time writing. cant compare and just write
 
         if data_changed:
             self.write_wallbox_data(wallboxes)
+            logging.info('Wallbox Data written to DB')
         else:
             logging.debug('Wallbox Data not changed. Not written to DB')
 
