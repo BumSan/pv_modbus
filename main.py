@@ -184,12 +184,12 @@ def main():
         # while charging, write any changed log. Otherwise only after x min
         logging.info('DB write section')
 
-        charging = False
+        plug_connected = False
         for wb in wallbox:
-            if wb.pv_charge_active or wb.grid_charge_active:
-                charging = True
+            if wb_prox.is_plug_connected_and_charge_ready(wb):
+                plug_connected = True
 
-        if charging:
+        if plug_connected:
             database.write_solarlog_data_only_if_changed(solar_log_data)
             database.write_wallbox_data_only_if_changed(wallbox)
         else:
