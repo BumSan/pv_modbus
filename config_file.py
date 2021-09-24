@@ -19,6 +19,7 @@ class ConfigFile:
             # Amp -> if we do not have enough PV power to reach the WB min, use this threshold value
             self.PV_CHARGE_AMP_TOLERANCE = float(config['WALLBOX']['PV_CHARGE_AMP_TOLERANCE'])
             # and take up to x Amp from grid
+            self.REDUCE_AVAILABLE_CURRENT_BY = float(config['WALLBOX']['REDUCE_AVAILABLE_CURRENT_BY'])
 
             # time constraints
             # secs. We want to charge at least for x secs before switch on->off (PV charge related)
@@ -28,7 +29,7 @@ class ConfigFile:
             self.MIN_WAIT_BEFORE_PV_ON = int(config['TIME']['MIN_TIME_PV_CHARGE'])
             # this is "Min time off"
 
-            self.SOLARLOG_WRITE_EVERY = int(config['LOGGING']['SOLARLOG_WRITE_EVERY'])  # *5s
+            self.SOLARLOG_WRITE_EVERY = int(config['LOGGING']['SOLARLOG_WRITE_EVERY'])  # seconds
 
             self.GPIO_SWITCH = int(config['SWITCH']['GPIO_SWITCH'])
 
@@ -37,8 +38,3 @@ class ConfigFile:
             self.INFLUX_USER = config['LOGGING']['INFLUX_USER']
             self.INFLUX_PWD = config['LOGGING']['INFLUX_PWD']
             self.INFLUX_DB_NAME = config['LOGGING']['INFLUX_DB_NAME']
-
-            # every x seconds, at least (earlier if data has changed)
-            self.WALLBOX_MIN_WRITE_CYCLE = float(config['LOGGING']['WALLBOX_MIN_WRITE_CYCLE'])
-            # every x seconds, at least (earlier if data has changed)
-            self.SOLARLOG_MIN_WRITE_CYCLE = float(config['LOGGING']['SOLARLOG_MIN_WRITE_CYCLE'])
