@@ -48,17 +48,6 @@ def main():
     if cfg.HAVE_SWITCH:
         pv_switch = PV_Switch(cfg.GPIO_SWITCH)
 
-    # basically
-    # check if any car is attached to WB
-    # -> deactivate Standby, if active (if nothing attached: activate Standby)
-    # check PV or immediate 11 kW charge via Button position
-    # check how many WB are attached to Cars and charging
-    # if immediate: distribute 11 kW to WB; and divide by number of chargers (mind power 4 kW. 6A)
-    # if PV, check available Power (> threshold, 3-4 kW?),
-    # ->  check last charge time (> 5min Abstand?),
-    # ->  if already charging from PV, keep on for min 5min)
-    # loop from here
-
     # init last charge
     for wb in wallbox:
         wb.last_charge_activation = datetime.datetime.now()
@@ -184,12 +173,12 @@ def main():
         # while charging, write any changed log. Otherwise only after x min
         logging.info('DB write section')
 
-        plug_connected = False
+        charging = False
         for wb in wallbox:
-            if wb_prox.is_plug_connected_and_charge_ready(wb):
-                plug_connected = True
+            if wb.grid_charge_active or wb.pv_charge_active:
+                charging = True
 
-        if plug_connected:
+        if charging:
             database.write_solarlog_data_only_if_changed(solar_log_data)
             database.write_wallbox_data_only_if_changed(wallbox)
         else:
