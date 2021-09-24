@@ -158,10 +158,11 @@ def main():
                 logging.warning('Available power for PV charge: %s W', available_power)
 
                 # check for enough power to use PV
-                if Toolbox.watt_to_amp_rounded(available_power) >= (cfg.WB_MIN_CURRENT - cfg.PV_CHARGE_AMP_TOLERANCE):
+                available_current = Toolbox.watt_to_amp_rounded(available_power)
+                available_current -= cfg.REDUCE_AVAILABLE_CURRENT_BY
+                if available_current >= (cfg.WB_MIN_CURRENT - cfg.PV_CHARGE_AMP_TOLERANCE):
                     # Charge galore
-                    wb_prox.activate_pv_charge(wallbox_connection, wallbox, Toolbox.watt_to_amp_rounded(available_power))
-
+                    wb_prox.activate_pv_charge(wallbox_connection, wallbox, available_current)
 
             logging.debug('Calculation cycle ends')
             logging.debug('')
@@ -173,12 +174,8 @@ def main():
         # while charging, write any changed log. Otherwise only after x min
         logging.info('DB write section')
 
-        charging = False
-        for wb in wallbox:
-            if wb.grid_charge_active or wb.pv_charge_active:
-                charging = True
-
-        if charging:
+        # use faster write cycle while charging is active
+        if wb_prox.is_charging_active(wallbox):
             database.write_solarlog_data_only_if_changed(solar_log_data)
             database.write_wallbox_data_only_if_changed(wallbox)
         else:
