@@ -361,3 +361,24 @@ def test_is_pv_charge_activation_allowed(setup_wallboxes_off_state, setup_config
     assert wbprox.is_pv_charge_activation_allowed(wallbox[0]) == wb1_result
     assert wbprox.is_pv_charge_activation_allowed(wallbox[1]) == wb2_result
 
+
+@pytest.mark.activate
+@pytest.mark.parametrize(
+    "pv_charge_on, grid_charge_on, result",
+    [
+        (True, False, True)
+        , (True, True, True)
+        , (False, True, True)
+        , (False, False, False)
+    ])
+def test_is_charging_active(setup_wallboxes_off_state, setup_config, pv_charge_on, grid_charge_on, result):
+
+    wallbox = setup_wallboxes_off_state
+    wbprox = WallboxProxy(setup_config)
+
+    wallbox[0].pv_charge_active = pv_charge_on
+    wallbox[0].grid_charge_active = grid_charge_on
+    wallbox[1].pv_charge_active = pv_charge_on
+    wallbox[1].grid_charge_active = grid_charge_on
+
+    assert wbprox.is_charging_active(wallbox) == result

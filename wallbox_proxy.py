@@ -99,8 +99,7 @@ class WallboxProxy:
                     else:  # we do not have enough power. Check if we can deactivate this WB
                         if self.is_pv_charge_deactivation_allowed(wb):
                             used_current = 0
-                            # not 0 but stay below min to keep car charge ready (not accounted to current budget)
-                            self.set_current_for_wallbox(wallbox_connection, wb, self.cfg.WB_MIN_CURRENT-1)
+                            self.set_current_for_wallbox(wallbox_connection, wb, used_current)
                             self.deactivate_pv_charge_for_wallbox(wb)
                             logging.warning('Charge deactivation for Wallbox ID %s', wb.slave_id)
                         else:  # not allowed, so reduce it to min value for now and try again later
@@ -177,3 +176,9 @@ class WallboxProxy:
                 wallbox_connection.set_max_current(wb.slave_id, 0)
                 wb.pv_charge_active = False
                 wb.last_charge_deactivation = datetime.datetime.now()
+
+    def is_charging_active(self, wallbox: List[WBSystemState]) -> bool:
+        for wb in wallbox:
+            if wb.pv_charge_active or wb.grid_charge_active:
+                return True
+        return False
