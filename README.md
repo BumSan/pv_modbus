@@ -1,9 +1,9 @@
 # External charge control for Energy Control Wallbox from Heidelberg  
 ## Main Features
-* Consider input from Solar Logger (SolarLog (tm))  
+* Consider input from Solar Logger (SolarLog (tm)) via Modbus TCP
   * Solar Power Output
   * Overall consumption
-* Interface to Heidelberg Wallbox
+* Interface to Heidelberg Wallbox via Modbus RTU
   * Read current charge and connector status
   * Limit current according to charge strategy
 * Time limits for on/off/on cycles 
