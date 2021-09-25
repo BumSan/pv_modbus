@@ -1,4 +1,5 @@
 from toolbox import Toolbox, TimeTools
+from pv_modbus_solarlog import SolarLogData
 import datetime
 import pytest
 
@@ -45,3 +46,35 @@ def test_watt_to_amp():
     assert Toolbox.watt_to_amp(690) == 1.0
     assert Toolbox.watt_to_amp(691) == 1.0014492753623188
     assert Toolbox.watt_to_amp(689) == 0.9985507246376811
+
+
+@pytest.fixture
+def setup_solar_log_data():
+
+    solar_log_data = SolarLogData()
+    return solar_log_data
+
+
+@pytest.mark.toolbox
+@pytest.mark.parametrize(
+    "actual_output, actual_consumption, already_used_charging_power_for_car, result",
+    [
+        (6370, 5160, 4440, 5650)
+        , (6330, 5870, 5120, 5580)
+        , (6380, 6550, 4420, 4250)
+        , (6370, 5160, 5130, 6340)
+        , (6370, 6510, 5880, 5740)
+        , (6370, 6510, 4430, 4290)
+        , (6460, 6610, 5860, 5710)
+        , (3940, 5240, 4430, 3130)
+        , (2960, 5200, 4440, 2200)
+        , (0, 500, 11000, 0)
+        , (0, 500, 0, 0)
+    ])
+def test_calc_available_power(actual_consumption, actual_output, already_used_charging_power_for_car, result):
+    solar_log_data = SolarLogData()
+    solar_log_data.actual_consumption = actual_consumption
+    solar_log_data.actual_output = actual_output
+
+    assert Toolbox.calc_available_power(solar_log_data, already_used_charging_power_for_car) == result
+
