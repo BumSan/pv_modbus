@@ -15,6 +15,7 @@ WB_MIN_CURRENT = 6.0
 PV_CHARGE_AMP_TOLERANCE = 2.0
 MIN_TIME_PV_CHARGE = 60
 MIN_WAIT_BEFORE_PV_ON = 60
+KEEP_CHARGE_CURRENT_STABLE_FOR = 20
 
 
 @pytest.fixture
@@ -25,6 +26,7 @@ def setup_config():
     cfg.PV_CHARGE_AMP_TOLERANCE = PV_CHARGE_AMP_TOLERANCE
     cfg.MIN_WAIT_BEFORE_PV_ON = MIN_WAIT_BEFORE_PV_ON
     cfg.MIN_TIME_PV_CHARGE = MIN_TIME_PV_CHARGE
+    cfg.KEEP_CHARGE_CURRENT_STABLE_FOR = KEEP_CHARGE_CURRENT_STABLE_FOR
     return cfg
 
 
@@ -33,6 +35,7 @@ def reset_wallboxes(wallboxes: List[WBSystemState]):
         wb.pv_charge_active = False
         wb.grid_charge_active = False
         wb.max_current_active = 0
+        wb.last_time_max_current_was_set = 0
 
 
 def create_fake_wallbox_connection():
