@@ -14,6 +14,7 @@ class WBSystemState:
     standby_active: WBDef = WBDef.DISABLE_STANDBY
 
     max_current_active = 0
+    last_time_max_current_was_set: datetime.datetime = 0
     actual_current_active = 0
 
     max_failsafe_current_active = 0

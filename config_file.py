@@ -20,6 +20,7 @@ class ConfigFile:
             self.PV_CHARGE_AMP_TOLERANCE = float(config['WALLBOX']['PV_CHARGE_AMP_TOLERANCE'])
             # and take up to x Amp from grid
             self.REDUCE_AVAILABLE_CURRENT_BY = float(config['WALLBOX']['REDUCE_AVAILABLE_CURRENT_BY'])
+            self.KEEP_CHARGE_CURRENT_STABLE_FOR = int(config['WALLBOX']['KEEP_CHARGE_CURRENT_STABLE_FOR'])
 
             # time constraints
             # secs. We want to charge at least for x secs before switch on->off (PV charge related)

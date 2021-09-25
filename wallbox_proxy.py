@@ -39,6 +39,15 @@ class WallboxProxy:
     def set_current_for_wallbox(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: WBSystemState, current: float):
         if wallbox_connection.set_max_current(wallbox.slave_id, Toolbox.amp_rounded_to_wb_format(current)):
             wallbox.max_current_active = current
+            wallbox.last_time_max_current_was_set = datetime.datetime.now()
+
+    def set_current_for_wallbox_relaxed(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: WBSystemState, current: float):
+        if wallbox.last_time_max_current_was_set is 0:  # first time
+            self.set_current_for_wallbox(wallbox_connection, wallbox, current)
+        else:
+            time_diff = datetime.datetime.now() - wallbox.last_time_max_current_was_set
+            if time_diff.total_seconds() > self.cfg.KEEP_CHARGE_CURRENT_STABLE_FOR:
+                self.set_current_for_wallbox(wallbox_connection, wallbox, current)
 
     def activate_grid_charge(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: List[WBSystemState]):
         # check how many Plugs are connected in correct state
@@ -74,7 +83,8 @@ class WallboxProxy:
         wallbox.last_charge_activation = datetime.datetime.now()
 
     def activate_pv_charge(self, wallbox_connection: ModbusRTUHeidelbergWB, wallbox: List[WBSystemState], available_current):
-        used_current = 0.0
+
+        used_current: float = 0.0
 
         # are any of the Wallboxes already charging with PV? then we update these first
         logging.info('Working on already active WBs first')
@@ -91,7 +101,7 @@ class WallboxProxy:
                     # check if we have enough power for this WB. If not we try to switch it off
                     if used_current >= (self.cfg.WB_MIN_CURRENT - self.cfg.PV_CHARGE_AMP_TOLERANCE):
                         # enough power. we already charge so no check required
-                        if used_current < self.cfg.WB_MIN_CURRENT:  # cant charge less than the min current
+                        if used_current < self.cfg.WB_MIN_CURRENT:  # cant charge less than the min current though
                             used_current = self.cfg.WB_MIN_CURRENT
                             logging.warning('Current adapted to WB_MIN_CURRENT %s', self.cfg.WB_MIN_CURRENT)
                         self.set_current_for_wallbox(wallbox_connection, wb, used_current)

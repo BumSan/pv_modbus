@@ -30,6 +30,9 @@ def main():
     wb_prox = WallboxProxy(cfg)
     time_tools = TimeTools()
 
+    available_power = 0
+    last_power_calc = TimeTools()
+
     # SolarLog
     config_solar_log = ModbusTCPConfig(cfg.SOLARLOG_IP, cfg.SOLARLOG_PORT, slave_id=cfg.SOLARLOG_SLAVEID)
     solarlog_connection = ModbusTCPSolarLog(config_solar_log, SolarLogReadInputs())
@@ -54,7 +57,6 @@ def main():
         wb.last_charge_deactivation = datetime.datetime.now()
 
     solar_log_data = SolarLogData()
-    db_write_enable = 0
     database = PVDatabase(cfg)
 
     # make sure that failsafe Current is always set
@@ -140,22 +142,11 @@ def main():
                 #if WBDef.FAKE_WB_CONNECTION:
                 #    solar_log_data.actual_output = 6000
 
-                # calculate how much power we have to set
-                # e.g. PV produces 6000 Watt, House consumes 4500 Watt (incl. Car charging!), Car charges with 4000 Watt
-                # 6000 - 4500 + 4000 -> 5500 Watt we can use for charging the car
-
-                # calc house consumption
-                house_consumption = solar_log_data.actual_consumption - already_used_charging_power_for_car
-                if house_consumption < 0:  # could happen as measurement is from different devices and times
-                    house_consumption = 0
-
-                # calc how much we could assign to the cars
-                available_power = solar_log_data.actual_output - house_consumption
-
-                # sanity check, can´t be more than PV output
-                if available_power > solar_log_data.actual_output:
-                    available_power = solar_log_data.actual_output
-                logging.warning('Available power for PV charge: %s W', available_power)
+                # calc the power we could spend for charging
+                # if we change our target power too often/fast, we start to resonate with the measured power consumption
+                if last_power_calc.seconds_have_passed_since_trigger() > cfg.KEEP_CHARGE_CURRENT_STABLE_FOR:
+                    available_power = Toolbox.calc_available_power(solar_log_data, already_used_charging_power_for_car)
+                    last_power_calc.trigger_time()
 
                 # check for enough power to use PV
                 available_current = Toolbox.watt_to_amp_rounded(available_power)
@@ -182,7 +173,7 @@ def main():
             # save every x seconds
             if time_tools.seconds_have_passed_since_trigger() >= cfg.SOLARLOG_WRITE_EVERY:
                 database.write_solarlog_data_only_if_changed(solar_log_data)
-                database.write_wallbox_data_only_if_changed(wallbox)
+                database.write_wallbox_data(wallbox)
                 time_tools.trigger_time()  # written
 
         # chill for some secs
