@@ -12,7 +12,7 @@ import datetime
 import configparser
 
 # log level
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.CRITICAL)
 
 
 def main():
@@ -167,8 +167,10 @@ def main():
 
         # use faster write cycle while charging is active
         if wb_prox.is_charging_active(wallbox):
-            database.write_solarlog_data_only_if_changed(solar_log_data)
-            database.write_wallbox_data_only_if_changed(wallbox)
+            if time_tools.seconds_have_passed_since_trigger() >= 60:
+                database.write_solarlog_data_only_if_changed(solar_log_data)
+                database.write_wallbox_data_only_if_changed(wallbox)
+                time_tools.trigger_time()  # written
         else:
             # save every x seconds
             if time_tools.seconds_have_passed_since_trigger() >= cfg.SOLARLOG_WRITE_EVERY:
